@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>École — Gestion des Points</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Login -->
+    <div id="login-view" class="view">
+      <div class="login-card">
+        <div class="login-header">
+          <div class="logo">🏫</div>
+          <h1>Gestion Scolaire</h1>
+          <p>Accès réservé aux enseignants et à la surveillance</p>
+        </div>
+
+        <form id="login-form">
+          <div class="form-group">
+            <label for="username">Nom d'utilisateur</label>
+            <input type="text" id="username" autocomplete="username" required placeholder="prof.martin">
+          </div>
+          <div class="form-group">
+            <label for="password">Mot de passe</label>
+            <div class="password-wrapper">
+              <input type="password" id="password" autocomplete="current-password" required placeholder="••••••••">
+              <button type="button" class="toggle-password" data-target="password" aria-label="Afficher le mot de passe">👁</button>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary btn-full">Se connecter</button>
+        </form>
+
+        <div id="login-error" class="error-msg hidden"></div>
+      </div>
+    </div>
+
+    <!-- Dashboard -->
+    <div id="dashboard-view" class="view hidden">
+      <header class="topbar">
+        <div class="topbar-left">
+          <span class="logo-small">🏫</span>
+          <h2>Gestion des Points</h2>
+        </div>
+        <div class="topbar-right">
+          <span id="user-info" class="user-badge"></span>
+          <button id="logout-btn" class="btn btn-ghost">Déconnexion</button>
+        </div>
+      </header>
+
+      <main class="main-content">
+        <aside class="sidebar">
+          <h3>Classes</h3>
+          <ul id="class-list" class="class-list"></ul>
+          <div id="surveillance-panel" class="surveillance-panel hidden">
+            <hr>
+            <h3>Administration</h3>
+            <button id="add-student-btn" class="btn btn-secondary btn-full">+ Ajouter un élève</button>
+            <button id="admin-dashboard-btn" class="btn btn-secondary btn-full">⚙️ Tableau de bord admin</button>
+            <button id="view-logs-btn" class="btn btn-ghost btn-full">📋 Journal des actions</button>
+          </div>
+        </aside>
+
+        <section class="students-section">
+          <div class="section-header">
+            <h3 id="current-class-name">Sélectionnez une classe</h3>
+            <span id="student-count" class="badge"></span>
+          </div>
+          <div id="students-grid" class="students-grid"></div>
+        </section>
+      </main>
+    </div>
+
+    <!-- Point adjustment modal -->
+    <div id="points-modal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <div id="modal-student-info" class="modal-student"></div>
+          <button class="modal-close">&times;</button>
+        </div>
+        <div class="points-display">
+          <span id="modal-current-points" class="points-big">100</span>
+          <span class="points-label">points (max. 100)</span>
+        </div>
+        <div class="quick-actions">
+          <button class="btn-points minus" data-change="-10">−10</button>
+          <button class="btn-points minus" data-change="-5">−5</button>
+          <button class="btn-points minus" data-change="-1">−1</button>
+          <button class="btn-points plus" data-change="1">+1</button>
+          <button class="btn-points plus" data-change="5">+5</button>
+          <button class="btn-points plus" data-change="10">+10</button>
+        </div>
+        <div class="form-group">
+          <label for="points-reason">Description du changement</label>
+          <textarea id="points-reason" rows="3" placeholder="Ex: Participation active en cours de mathématiques" required></textarea>
+        </div>
+        <div class="modal-actions">
+          <button id="apply-points-btn" class="btn btn-primary">Appliquer la modification</button>
+        </div>
+        <div id="history-section">
+          <h4>Historique récent</h4>
+          <ul id="history-list" class="history-list"></ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add student modal -->
+    <div id="add-student-modal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Ajouter un élève</h3>
+          <button class="modal-close">&times;</button>
+        </div>
+        <form id="add-student-form">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="new-first-name">Prénom</label>
+              <input type="text" id="new-first-name" required>
+            </div>
+            <div class="form-group">
+              <label for="new-last-name">Nom</label>
+              <input type="text" id="new-last-name" required>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="new-class">Classe</label>
+            <select id="new-class" required></select>
+          </div>
+          <div class="form-group">
+            <label for="new-photo">Photo (optionnel)</label>
+            <input type="file" id="new-photo" accept="image/*">
+          </div>
+          <div class="form-group">
+            <label for="add-reason">Motif de l'ajout</label>
+            <textarea id="add-reason" rows="2" required placeholder="Ex: Nouvel élève inscrit en cours d'année"></textarea>
+          </div>
+          <button type="submit" class="btn btn-primary btn-full">Ajouter l'élève (100 pts)</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Edit student modal -->
+    <div id="edit-student-modal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Modifier un élève</h3>
+          <button class="modal-close">&times;</button>
+        </div>
+        <form id="edit-student-form">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="edit-first-name">Prénom</label>
+              <input type="text" id="edit-first-name" required>
+            </div>
+            <div class="form-group">
+              <label for="edit-last-name">Nom</label>
+              <input type="text" id="edit-last-name" required>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="edit-class">Classe</label>
+            <select id="edit-class" required></select>
+          </div>
+          <div class="form-group">
+            <label for="edit-photo">Nouvelle photo (optionnel)</label>
+            <input type="file" id="edit-photo" accept="image/*">
+          </div>
+          <button type="submit" class="btn btn-primary btn-full">Enregistrer les modifications</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Admin dashboard -->
+    <div id="admin-dashboard" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content modal-xl admin-dashboard">
+        <div class="modal-header">
+          <div>
+            <h3>Tableau de bord administrateur</h3>
+            <p class="admin-subtitle">Gestion des comptes et de la base de données</p>
+          </div>
+          <button class="modal-close">&times;</button>
+        </div>
+
+        <div class="admin-tabs">
+          <button class="admin-tab active" data-admin-tab="users">👥 Utilisateurs</button>
+          <button class="admin-tab" data-admin-tab="database">🗄️ Base de données</button>
+          <button class="admin-tab" data-admin-tab="logs">📋 Journaux</button>
+        </div>
+
+        <!-- Users tab -->
+        <div id="admin-users-panel" class="admin-panel">
+          <div class="role-cards">
+            <div class="role-card role-teacher">
+              <span class="role-badge teacher">Enseignant</span>
+              <ul>
+                <li>Consulter les élèves et les classes</li>
+                <li>Modifier les points (+ description obligatoire)</li>
+                <li>Consulter l'historique des points</li>
+              </ul>
+            </div>
+            <div class="role-card role-surveillance">
+              <span class="role-badge surveillance">Surveillance générale</span>
+              <ul>
+                <li>Tous les droits enseignant</li>
+                <li>Ajouter, modifier et supprimer des élèves</li>
+                <li>Gérer les comptes utilisateurs</li>
+                <li>Contrôler la base de données et les journaux</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="admin-toolbar">
+            <div class="admin-filters">
+              <button class="filter-btn active" data-user-filter="all">Tous</button>
+              <button class="filter-btn" data-user-filter="teacher">Enseignants</button>
+              <button class="filter-btn" data-user-filter="surveillance">Surveillance</button>
+            </div>
+            <button id="add-user-btn" class="btn btn-primary">+ Ajouter un utilisateur</button>
+          </div>
+          <div id="admin-users-list" class="accounts-list"></div>
+        </div>
+
+        <!-- Database tab -->
+        <div id="admin-database-panel" class="admin-panel hidden">
+          <div id="admin-stats" class="stats-grid"></div>
+          <div class="admin-section">
+            <div class="admin-section-header">
+              <h4>Importer les élèves</h4>
+            </div>
+            <p class="admin-hint">Importez les noms et prénoms depuis un fichier Excel (.xlsx), Word (.docx) ou PDF. Les élèves actifs actuels seront remplacés.</p>
+            <div class="import-students-row">
+              <input type="file" id="import-students-file" accept=".xlsx,.xls,.docx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
+              <button type="button" id="import-students-btn" class="btn btn-primary btn-sm">Importer le fichier</button>
+            </div>
+            <p id="import-students-status" class="admin-hint hidden"></p>
+          </div>
+          <div class="admin-section admin-reset-section">
+            <div class="admin-section-header">
+              <h4>Réinitialisation des points</h4>
+            </div>
+            <p class="admin-hint">Remet tous les élèves actifs à 100 points et vide l'historique des modifications.</p>
+            <button id="reset-points-btn" class="btn btn-danger btn-sm">Réinitialiser tous les points à 100</button>
+          </div>
+          <div class="admin-section">
+            <div class="admin-section-header">
+              <h4>Classes</h4>
+              <button id="add-class-btn" class="btn btn-secondary btn-sm">+ Ajouter une classe</button>
+            </div>
+            <div id="admin-classes-list" class="classes-table"></div>
+          </div>
+        </div>
+
+        <!-- Logs tab -->
+        <div id="admin-logs-panel" class="admin-panel hidden">
+          <div class="tabs admin-log-tabs">
+            <button class="tab active" data-admin-log="points">Modifications de points</button>
+            <button class="tab" data-admin-log="students">Élèves</button>
+            <button class="tab" data-admin-log="users">Utilisateurs</button>
+          </div>
+          <div id="admin-logs-points" class="tab-content"></div>
+          <div id="admin-logs-students" class="tab-content hidden"></div>
+          <div id="admin-logs-users" class="tab-content hidden"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add/Edit user modal -->
+    <div id="user-form-modal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 id="user-form-title">Ajouter un utilisateur</h3>
+          <button class="modal-close">&times;</button>
+        </div>
+        <form id="user-form">
+          <div class="form-group">
+            <label for="user-full-name">Nom complet</label>
+            <input type="text" id="user-full-name" required>
+          </div>
+          <div class="form-group">
+            <label for="user-username">Nom d'utilisateur</label>
+            <input type="text" id="user-username" required autocomplete="username">
+          </div>
+          <div class="form-group">
+            <label for="user-role">Rôle et droits</label>
+            <select id="user-role" required>
+              <option value="teacher">Enseignant — consultation et points</option>
+              <option value="surveillance">Surveillance générale — administration complète</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="user-password">Mot de passe <span id="user-password-hint" class="hint hidden">(laisser vide pour ne pas changer)</span></label>
+            <div class="password-wrapper">
+              <input type="password" id="user-password" minlength="8" placeholder="••••••••" autocomplete="new-password">
+              <button type="button" class="toggle-password" data-target="user-password" aria-label="Afficher le mot de passe">👁</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="user-reason">Motif</label>
+            <textarea id="user-reason" rows="2" required placeholder="Ex: Nouveau compte enseignant"></textarea>
+          </div>
+          <button type="submit" class="btn btn-primary btn-full">Enregistrer</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Delete user modal -->
+    <div id="delete-user-modal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content modal-sm">
+        <div class="modal-header">
+          <h3>Supprimer l'utilisateur</h3>
+          <button class="modal-close">&times;</button>
+        </div>
+        <p id="delete-user-name" class="delete-warning"></p>
+        <div class="form-group">
+          <label for="delete-user-reason">Motif de la suppression</label>
+          <textarea id="delete-user-reason" rows="2" required></textarea>
+        </div>
+        <div class="modal-actions">
+          <button id="confirm-delete-user-btn" class="btn btn-danger">Confirmer</button>
+          <button class="modal-close btn btn-ghost">Annuler</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add/Edit class modal -->
+    <div id="class-form-modal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content modal-sm">
+        <div class="modal-header">
+          <h3 id="class-form-title">Ajouter une classe</h3>
+          <button class="modal-close">&times;</button>
+        </div>
+        <form id="class-form">
+          <div class="form-group">
+            <label for="class-name">Nom de la classe</label>
+            <input type="text" id="class-name" required placeholder="Ex: 4ème A">
+          </div>
+          <div class="form-group">
+            <label for="class-reason">Motif</label>
+            <textarea id="class-reason" rows="2" required></textarea>
+          </div>
+          <button type="submit" class="btn btn-primary btn-full">Enregistrer</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Delete class modal -->
+    <div id="delete-class-modal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content modal-sm">
+        <div class="modal-header">
+          <h3>Supprimer la classe</h3>
+          <button class="modal-close">&times;</button>
+        </div>
+        <p id="delete-class-name" class="delete-warning"></p>
+        <div class="form-group">
+          <label for="delete-class-reason">Motif de la suppression</label>
+          <textarea id="delete-class-reason" rows="2" required></textarea>
+        </div>
+        <div class="modal-actions">
+          <button id="confirm-delete-class-btn" class="btn btn-danger">Confirmer</button>
+          <button class="modal-close btn btn-ghost">Annuler</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Delete history entry modal -->
+    <div id="delete-history-modal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content modal-sm">
+        <div class="modal-header">
+          <h3>Supprimer de l'historique</h3>
+          <button class="modal-close">&times;</button>
+        </div>
+        <p id="delete-history-info" class="delete-warning"></p>
+        <div class="form-group">
+          <label for="delete-history-reason">Motif de la suppression</label>
+          <textarea id="delete-history-reason" rows="2" required placeholder="Ex: Entrée enregistrée par erreur"></textarea>
+        </div>
+        <div class="modal-actions">
+          <button id="confirm-delete-history-btn" class="btn btn-danger">Supprimer</button>
+          <button class="modal-close btn btn-ghost">Annuler</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Reset all points modal -->
+    <div id="reset-points-modal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content modal-sm">
+        <div class="modal-header">
+          <h3>Réinitialiser les points</h3>
+          <button class="modal-close">&times;</button>
+        </div>
+        <p class="delete-warning">
+          Tous les élèves actifs seront remis à <strong>100 points</strong> et l'historique des modifications sera effacé. Cette action est irréversible.
+        </p>
+        <div class="form-group">
+          <label for="reset-points-reason">Motif</label>
+          <textarea id="reset-points-reason" rows="2" required placeholder="Ex: Début de trimestre"></textarea>
+        </div>
+        <div class="modal-actions">
+          <button id="confirm-reset-points-btn" class="btn btn-danger">Réinitialiser</button>
+          <button class="modal-close btn btn-ghost">Annuler</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Legacy logs modal (kept for quick access from sidebar) -->
+    <div id="delete-modal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content modal-sm">
+        <div class="modal-header">
+          <h3>Supprimer l'élève</h3>
+          <button class="modal-close">&times;</button>
+        </div>
+        <p id="delete-student-name" class="delete-warning"></p>
+        <div class="form-group">
+          <label for="delete-reason">Motif de la suppression</label>
+          <textarea id="delete-reason" rows="2" required placeholder="Ex: Transfert vers une autre établissement"></textarea>
+        </div>
+        <div class="modal-actions">
+          <button id="confirm-delete-btn" class="btn btn-danger">Confirmer la suppression</button>
+          <button class="modal-close btn btn-ghost">Annuler</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="toast hidden"></div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
