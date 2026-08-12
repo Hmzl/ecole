@@ -1,12 +1,8 @@
-import db from './db.js';
+import { get, run } from './db.js';
 import { MAX_POINTS } from './admin.js';
 
-const reset = db.transaction(() => {
-  db.prepare('UPDATE students SET points = ? WHERE active = 1').run(MAX_POINTS);
-  db.prepare('DELETE FROM point_logs').run();
-});
+await run('UPDATE students SET points = ? WHERE active = 1', [MAX_POINTS]);
+await run('DELETE FROM point_logs');
 
-reset();
-
-const count = db.prepare('SELECT COUNT(*) as count FROM students WHERE active = 1').get().count;
+const count = (await get('SELECT COUNT(*) as count FROM students WHERE active = 1')).count;
 console.log(`${count} élève(s) réinitialisé(s) à ${MAX_POINTS} points. Historique effacé.`);

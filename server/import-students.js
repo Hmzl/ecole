@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import XLSX from 'xlsx';
 import mammoth from 'mammoth';
-import db from './db.js';
+import { all, run } from './db.js';
 
 const CODE_RE = /^[FE]\d{8,}$/i;
 const GENRE_RE = /^(fille|gar[cç]on)$/i;
@@ -245,9 +245,11 @@ function parsePlainTextList(text) {
   return extractNamePairs(lines).map((s) => ({ ...s, className: '' }));
 }
 
-export async function parseStudentsFile(filePath, originalName) {
-  const ext = path.extname(originalName || filePath).toLowerCase();
-  const buffer = fs.readFileSync(filePath);
+export async function parseStudentsFile(filePathOrBuffer, originalName) {
+  const ext = path.extname(originalName || (typeof filePathOrBuffer === 'string' ? filePathOrBuffer : '')).toLowerCase();
+  const buffer = Buffer.isBuffer(filePathOrBuffer)
+    ? filePathOrBuffer
+    : fs.readFileSync(filePathOrBuffer);
 
   let rows;
   if (ext === '.xlsx' || ext === '.xls') {
@@ -281,59 +283,47 @@ export async function parseStudentsFile(filePath, originalName) {
   return groupByClass(cleaned);
 }
 
-export function applyStudentImport(userId, classesEleves) {
-  const replace = db.transaction(() => {
-    db.prepare('UPDATE students SET active = 0').run();
+export async function applyStudentImport(userId, classesEleves) {
+  await run('UPDATE students SET active = 0');
 
-    const existingClasses = db.prepare('SELECT id, name FROM classes').all();
-    const classByName = new Map(existingClasses.map((c) => [c.name, c.id]));
-    const insertClass = db.prepare('INSERT INTO classes (name) VALUES (?)');
-    const renameClass = db.prepare('UPDATE classes SET name = ? WHERE id = ?');
-    const insertStudent = db.prepare(`
-      INSERT INTO students (class_id, first_name, last_name, points, active)
-      VALUES (?, ?, ?, 100, 1)
-    `);
-    const logStmt = db.prepare(`
-      INSERT INTO student_logs (student_id, user_id, action, student_name, class_id, reason)
-      VALUES (?, ?, 'add', ?, ?, ?)
-    `);
+  const existingClasses = await all('SELECT id, name FROM classes');
+  const classByName = new Map(existingClasses.map((c) => [c.name, c.id]));
+  const usedClassIds = new Set();
+  let imported = 0;
 
-    const usedClassIds = new Set();
-    let imported = 0;
-
-    for (const { className, students } of classesEleves) {
-      let classId = classByName.get(className);
-      if (!classId) {
-        const reusable = existingClasses.find(
-          (c) => !usedClassIds.has(c.id) && !classesEleves.some((x) => x.className === c.name)
-        );
-        if (reusable) {
-          renameClass.run(className, reusable.id);
-          classId = reusable.id;
-          classByName.set(className, classId);
-          classByName.delete(reusable.name);
-        } else {
-          classId = Number(insertClass.run(className).lastInsertRowid);
-          classByName.set(className, classId);
-        }
-      }
-      usedClassIds.add(classId);
-
-      for (const { firstName, lastName } of students) {
-        const result = insertStudent.run(classId, firstName, lastName);
-        logStmt.run(
-          result.lastInsertRowid,
-          userId,
-          `${firstName} ${lastName}`,
-          classId,
-          `Import depuis fichier (${className})`
-        );
-        imported += 1;
+  for (const { className, students } of classesEleves) {
+    let classId = classByName.get(className);
+    if (!classId) {
+      const reusable = existingClasses.find(
+        (c) => !usedClassIds.has(c.id) && !classesEleves.some((x) => x.className === c.name)
+      );
+      if (reusable) {
+        await run('UPDATE classes SET name = ? WHERE id = ?', [className, reusable.id]);
+        classId = reusable.id;
+        classByName.set(className, classId);
+        classByName.delete(reusable.name);
+      } else {
+        const result = await run('INSERT INTO classes (name) VALUES (?)', [className]);
+        classId = result.lastInsertRowid;
+        classByName.set(className, classId);
       }
     }
+    usedClassIds.add(classId);
 
-    return { imported, classes: classesEleves.length };
-  });
+    for (const { firstName, lastName } of students) {
+      const result = await run(
+        `INSERT INTO students (class_id, first_name, last_name, points, active)
+         VALUES (?, ?, ?, 100, 1)`,
+        [classId, firstName, lastName]
+      );
+      await run(
+        `INSERT INTO student_logs (student_id, user_id, action, student_name, class_id, reason)
+         VALUES (?, ?, 'add', ?, ?, ?)`,
+        [result.lastInsertRowid, userId, `${firstName} ${lastName}`, classId, `Import depuis fichier (${className})`]
+      );
+      imported += 1;
+    }
+  }
 
-  return replace();
+  return { imported, classes: classesEleves.length };
 }

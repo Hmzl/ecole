@@ -1,54 +1,53 @@
 import bcrypt from 'bcryptjs';
-import db from './db.js';
+import { get, all, run, batch } from './db.js';
 
 const VALID_ROLES = ['teacher', 'surveillance'];
 export const MAX_POINTS = 100;
 
-export function recalculateStudentPoints(studentId) {
-  const logs = db.prepare(`
+export async function recalculateStudentPoints(studentId) {
+  const logs = await all(`
     SELECT points_change FROM point_logs
     WHERE student_id = ?
     ORDER BY created_at ASC, id ASC
-  `).all(studentId);
+  `, [studentId]);
 
   let points = MAX_POINTS;
   for (const log of logs) {
     points = Math.max(0, Math.min(MAX_POINTS, points + log.points_change));
   }
 
-  db.prepare('UPDATE students SET points = ? WHERE id = ?').run(points, studentId);
+  await run('UPDATE students SET points = ? WHERE id = ?', [points, studentId]);
   return points;
 }
 
-export function deletePointLog(actorId, logId, reason) {
+export async function deletePointLog(actorId, logId, reason) {
   if (!reason?.trim()) {
     throw Object.assign(new Error('Un motif de suppression est requis'), { status: 400 });
   }
 
-  const log = db.prepare('SELECT * FROM point_logs WHERE id = ?').get(logId);
+  const log = await get('SELECT * FROM point_logs WHERE id = ?', [logId]);
   if (!log) throw Object.assign(new Error('Entrée introuvable'), { status: 404 });
 
-  const student = db.prepare('SELECT id FROM students WHERE id = ? AND active = 1').get(log.student_id);
+  const student = await get('SELECT id FROM students WHERE id = ? AND active = 1', [log.student_id]);
   if (!student) throw Object.assign(new Error('Élève introuvable'), { status: 404 });
 
-  db.prepare('DELETE FROM point_logs WHERE id = ?').run(logId);
-  const points = recalculateStudentPoints(log.student_id);
+  await run('DELETE FROM point_logs WHERE id = ?', [logId]);
+  const points = await recalculateStudentPoints(log.student_id);
 
   return { studentId: log.student_id, points };
 }
 
-export function resetAllPoints(actorId, reason) {
+export async function resetAllPoints(actorId, reason) {
   if (!reason?.trim()) {
     throw Object.assign(new Error('Un motif est requis'), { status: 400 });
   }
 
-  const reset = db.transaction(() => {
-    db.prepare('UPDATE students SET points = ? WHERE active = 1').run(MAX_POINTS);
-    db.prepare('DELETE FROM point_logs').run();
-  });
-  reset();
+  await batch([
+    { sql: 'UPDATE students SET points = ? WHERE active = 1', args: [MAX_POINTS] },
+    { sql: 'DELETE FROM point_logs', args: [] }
+  ]);
 
-  const count = db.prepare('SELECT COUNT(*) as count FROM students WHERE active = 1').get().count;
+  const count = (await get('SELECT COUNT(*) as count FROM students WHERE active = 1')).count;
   return { studentsUpdated: count };
 }
 
@@ -59,22 +58,22 @@ function validatePassword(password) {
   return null;
 }
 
-function countSurveillanceUsers(excludeId = null) {
+async function countSurveillanceUsers(excludeId = null) {
   const row = excludeId
-    ? db.prepare(`SELECT COUNT(*) as count FROM users WHERE role = 'surveillance' AND id != ?`).get(excludeId)
-    : db.prepare(`SELECT COUNT(*) as count FROM users WHERE role = 'surveillance'`).get();
+    ? await get(`SELECT COUNT(*) as count FROM users WHERE role = 'surveillance' AND id != ?`, [excludeId])
+    : await get(`SELECT COUNT(*) as count FROM users WHERE role = 'surveillance'`);
   return row.count;
 }
 
-export function getAdminStats() {
-  const teachers = db.prepare(`SELECT COUNT(*) as count FROM users WHERE role = 'teacher'`).get().count;
-  const surveillance = db.prepare(`SELECT COUNT(*) as count FROM users WHERE role = 'surveillance'`).get().count;
-  const activeStudents = db.prepare(`SELECT COUNT(*) as count FROM students WHERE active = 1`).get().count;
-  const inactiveStudents = db.prepare(`SELECT COUNT(*) as count FROM students WHERE active = 0`).get().count;
-  const classes = db.prepare(`SELECT COUNT(*) as count FROM classes`).get().count;
-  const pointLogs = db.prepare(`SELECT COUNT(*) as count FROM point_logs`).get().count;
-  const studentLogs = db.prepare(`SELECT COUNT(*) as count FROM student_logs`).get().count;
-  const userLogs = db.prepare(`SELECT COUNT(*) as count FROM user_logs`).get().count;
+export async function getAdminStats() {
+  const teachers = (await get(`SELECT COUNT(*) as count FROM users WHERE role = 'teacher'`)).count;
+  const surveillance = (await get(`SELECT COUNT(*) as count FROM users WHERE role = 'surveillance'`)).count;
+  const activeStudents = (await get(`SELECT COUNT(*) as count FROM students WHERE active = 1`)).count;
+  const inactiveStudents = (await get(`SELECT COUNT(*) as count FROM students WHERE active = 0`)).count;
+  const classes = (await get(`SELECT COUNT(*) as count FROM classes`)).count;
+  const pointLogs = (await get(`SELECT COUNT(*) as count FROM point_logs`)).count;
+  const studentLogs = (await get(`SELECT COUNT(*) as count FROM student_logs`)).count;
+  const userLogs = (await get(`SELECT COUNT(*) as count FROM user_logs`)).count;
 
   return {
     users: { teachers, surveillance, total: teachers + surveillance },
@@ -84,29 +83,30 @@ export function getAdminStats() {
   };
 }
 
-export function listAdminUsers(currentUserId) {
-  return db.prepare(`
+export async function listAdminUsers(currentUserId) {
+  const users = await all(`
     SELECT id, username, full_name, role, created_at
     FROM users
     ORDER BY role DESC, full_name
-  `).all().map(user => ({
+  `);
+  return users.map((user) => ({
     ...user,
     is_self: user.id === currentUserId
   }));
 }
 
-export function listAdminClasses() {
-  return db.prepare(`
+export async function listAdminClasses() {
+  return all(`
     SELECT c.id, c.name, c.created_at,
            COUNT(s.id) as student_count
     FROM classes c
     LEFT JOIN students s ON s.class_id = c.id AND s.active = 1
     GROUP BY c.id
     ORDER BY c.name
-  `).all();
+  `);
 }
 
-export function createAdminUser(actorId, { username, password, fullName, role, reason }) {
+export async function createAdminUser(actorId, { username, password, fullName, role, reason }) {
   if (!username?.trim() || !fullName?.trim() || !reason?.trim()) {
     throw Object.assign(new Error('Tous les champs sont requis, y compris le motif'), { status: 400 });
   }
@@ -116,29 +116,24 @@ export function createAdminUser(actorId, { username, password, fullName, role, r
   const pwdError = validatePassword(password);
   if (pwdError) throw Object.assign(new Error(pwdError), { status: 400 });
 
-  const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(username.trim());
+  const existing = await get('SELECT id FROM users WHERE username = ?', [username.trim()]);
   if (existing) throw Object.assign(new Error('Ce nom d\'utilisateur existe déjà'), { status: 409 });
 
   const hash = bcrypt.hashSync(password, 12);
+  const result = await run(`
+    INSERT INTO users (username, password_hash, full_name, role)
+    VALUES (?, ?, ?, ?)
+  `, [username.trim(), hash, fullName.trim(), role]);
 
-  const insert = db.transaction(() => {
-    const result = db.prepare(`
-      INSERT INTO users (username, password_hash, full_name, role)
-      VALUES (?, ?, ?, ?)
-    `).run(username.trim(), hash, fullName.trim(), role);
+  await run(`
+    INSERT INTO user_logs (target_user_id, user_id, action, target_name, reason)
+    VALUES (?, ?, 'add', ?, ?)
+  `, [result.lastInsertRowid, actorId, fullName.trim(), reason.trim()]);
 
-    db.prepare(`
-      INSERT INTO user_logs (target_user_id, user_id, action, target_name, reason)
-      VALUES (?, ?, 'add', ?, ?)
-    `).run(result.lastInsertRowid, actorId, fullName.trim(), reason.trim());
-
-    return result.lastInsertRowid;
-  });
-
-  return insert();
+  return result.lastInsertRowid;
 }
 
-export function updateAdminUser(actorId, userId, { username, password, fullName, role, reason }) {
+export async function updateAdminUser(actorId, userId, { username, password, fullName, role, reason }) {
   if (!username?.trim() || !fullName?.trim() || !reason?.trim()) {
     throw Object.assign(new Error('Nom, identifiant et motif requis'), { status: 400 });
   }
@@ -146,100 +141,100 @@ export function updateAdminUser(actorId, userId, { username, password, fullName,
     throw Object.assign(new Error('Rôle invalide'), { status: 400 });
   }
 
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+  const user = await get('SELECT * FROM users WHERE id = ?', [userId]);
   if (!user) throw Object.assign(new Error('Utilisateur introuvable'), { status: 404 });
 
-  const duplicate = db.prepare('SELECT id FROM users WHERE username = ? AND id != ?').get(username.trim(), user.id);
+  const duplicate = await get('SELECT id FROM users WHERE username = ? AND id != ?', [username.trim(), user.id]);
   if (duplicate) throw Object.assign(new Error('Ce nom d\'utilisateur existe déjà'), { status: 409 });
 
   const newRole = role || user.role;
-  if (user.role === 'surveillance' && newRole !== 'surveillance' && countSurveillanceUsers(user.id) === 0) {
+  if (user.role === 'surveillance' && newRole !== 'surveillance' && (await countSurveillanceUsers(user.id)) === 0) {
     throw Object.assign(new Error('Impossible de retirer le dernier compte surveillance'), { status: 400 });
   }
 
-  const update = db.transaction(() => {
-    if (password) {
-      const pwdError = validatePassword(password);
-      if (pwdError) throw Object.assign(new Error(pwdError), { status: 400 });
-      const hash = bcrypt.hashSync(password, 12);
-      db.prepare('UPDATE users SET username = ?, full_name = ?, role = ?, password_hash = ? WHERE id = ?')
-        .run(username.trim(), fullName.trim(), newRole, hash, user.id);
-    } else {
-      db.prepare('UPDATE users SET username = ?, full_name = ?, role = ? WHERE id = ?')
-        .run(username.trim(), fullName.trim(), newRole, user.id);
-    }
+  if (password) {
+    const pwdError = validatePassword(password);
+    if (pwdError) throw Object.assign(new Error(pwdError), { status: 400 });
+    const hash = bcrypt.hashSync(password, 12);
+    await run(
+      'UPDATE users SET username = ?, full_name = ?, role = ?, password_hash = ? WHERE id = ?',
+      [username.trim(), fullName.trim(), newRole, hash, user.id]
+    );
+  } else {
+    await run(
+      'UPDATE users SET username = ?, full_name = ?, role = ? WHERE id = ?',
+      [username.trim(), fullName.trim(), newRole, user.id]
+    );
+  }
 
-    db.prepare(`
-      INSERT INTO user_logs (target_user_id, user_id, action, target_name, reason)
-      VALUES (?, ?, 'edit', ?, ?)
-    `).run(user.id, actorId, fullName.trim(), reason.trim());
-  });
-
-  update();
+  await run(`
+    INSERT INTO user_logs (target_user_id, user_id, action, target_name, reason)
+    VALUES (?, ?, 'edit', ?, ?)
+  `, [user.id, actorId, fullName.trim(), reason.trim()]);
 }
 
-export function deleteAdminUser(actorId, userId, reason) {
+export async function deleteAdminUser(actorId, userId, reason) {
   if (!reason?.trim()) {
     throw Object.assign(new Error('Un motif de suppression est requis'), { status: 400 });
   }
 
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+  const user = await get('SELECT * FROM users WHERE id = ?', [userId]);
   if (!user) throw Object.assign(new Error('Utilisateur introuvable'), { status: 404 });
   if (user.id === actorId) {
     throw Object.assign(new Error('Vous ne pouvez pas supprimer votre propre compte'), { status: 400 });
   }
-  if (user.role === 'surveillance' && countSurveillanceUsers(user.id) === 0) {
+  if (user.role === 'surveillance' && (await countSurveillanceUsers(user.id)) === 0) {
     throw Object.assign(new Error('Impossible de supprimer le dernier compte surveillance'), { status: 400 });
   }
 
-  const remove = db.transaction(() => {
-    db.prepare('DELETE FROM users WHERE id = ?').run(user.id);
-    db.prepare(`
-      INSERT INTO user_logs (target_user_id, user_id, action, target_name, reason)
-      VALUES (?, ?, 'remove', ?, ?)
-    `).run(user.id, actorId, user.full_name, reason.trim());
-  });
-  remove();
+  await run('DELETE FROM users WHERE id = ?', [user.id]);
+  await run(`
+    INSERT INTO user_logs (target_user_id, user_id, action, target_name, reason)
+    VALUES (?, ?, 'remove', ?, ?)
+  `, [user.id, actorId, user.full_name, reason.trim()]);
 }
 
-export function createAdminClass(actorId, { name, reason }) {
+export async function createAdminClass(actorId, { name, reason }) {
   if (!name?.trim() || !reason?.trim()) {
     throw Object.assign(new Error('Nom de classe et motif requis'), { status: 400 });
   }
 
-  const existing = db.prepare('SELECT id FROM classes WHERE name = ?').get(name.trim());
+  const existing = await get('SELECT id FROM classes WHERE name = ?', [name.trim()]);
   if (existing) throw Object.assign(new Error('Cette classe existe déjà'), { status: 409 });
 
-  const result = db.prepare('INSERT INTO classes (name) VALUES (?)').run(name.trim());
+  const result = await run('INSERT INTO classes (name) VALUES (?)', [name.trim()]);
   return result.lastInsertRowid;
 }
 
-export function updateAdminClass(classId, { name, reason }) {
+export async function updateAdminClass(classId, { name, reason }) {
   if (!name?.trim() || !reason?.trim()) {
     throw Object.assign(new Error('Nom de classe et motif requis'), { status: 400 });
   }
 
-  const cls = db.prepare('SELECT * FROM classes WHERE id = ?').get(classId);
+  const cls = await get('SELECT * FROM classes WHERE id = ?', [classId]);
   if (!cls) throw Object.assign(new Error('Classe introuvable'), { status: 404 });
 
-  const duplicate = db.prepare('SELECT id FROM classes WHERE name = ? AND id != ?').get(name.trim(), classId);
+  const duplicate = await get('SELECT id FROM classes WHERE name = ? AND id != ?', [name.trim(), classId]);
   if (duplicate) throw Object.assign(new Error('Cette classe existe déjà'), { status: 409 });
 
-  db.prepare('UPDATE classes SET name = ? WHERE id = ?').run(name.trim(), classId);
+  await run('UPDATE classes SET name = ? WHERE id = ?', [name.trim(), classId]);
 }
 
-export function deleteAdminClass(classId, { reason }) {
+export async function deleteAdminClass(classId, { reason }) {
   if (!reason?.trim()) {
     throw Object.assign(new Error('Un motif de suppression est requis'), { status: 400 });
   }
 
-  const cls = db.prepare('SELECT * FROM classes WHERE id = ?').get(classId);
+  const cls = await get('SELECT * FROM classes WHERE id = ?', [classId]);
   if (!cls) throw Object.assign(new Error('Classe introuvable'), { status: 404 });
 
-  const students = db.prepare('SELECT COUNT(*) as count FROM students WHERE class_id = ? AND active = 1').get(classId).count;
+  const students = (await get(
+    'SELECT COUNT(*) as count FROM students WHERE class_id = ? AND active = 1',
+    [classId]
+  )).count;
   if (students > 0) {
     throw Object.assign(new Error('Impossible de supprimer une classe contenant des élèves actifs'), { status: 400 });
   }
 
-  db.prepare('DELETE FROM classes WHERE id = ?').run(classId);
+  await run('DELETE FROM classes WHERE id = ?', [classId]);
 }
