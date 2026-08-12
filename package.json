@@ -10,9 +10,13 @@
     "replace-students": "node server/replace-students.js",
     "reset-points": "node server/reset-points.js"
   },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
+    "@libsql/client": "^0.15.15",
+    "@vercel/blob": "^1.1.1",
     "bcryptjs": "^2.4.3",
-    "better-sqlite3": "^11.7.0",
     "cors": "^2.8.5",
     "express": "^4.21.2",
     "express-rate-limit": "^7.5.0",

@@ -1,15 +1,140 @@
-import Database from 'better-sqlite3';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const dbPath = path.join(__dirname, '..', 'data', 'ecole.db');
+const localDbPath = path.join(__dirname, '..', 'data', 'ecole.db');
 
-const db = new Database(dbPath);
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
+let clientPromise;
 
-db.exec(`
+function normalizeArgs(args) {
+  return (args || []).map((a) => (typeof a === 'bigint' ? Number(a) : a));
+}
+
+function normalizeRow(row) {
+  if (!row || typeof row !== 'object') return row;
+  const out = {};
+  for (const [k, v] of Object.entries(row)) {
+    out[k] = typeof v === 'bigint' ? Number(v) : v;
+  }
+  return out;
+}
+
+async function createClient() {
+  const tursoUrl = process.env.TURSO_DATABASE_URL || process.env.LIBSQL_URL;
+  const authToken = process.env.TURSO_AUTH_TOKEN || process.env.LIBSQL_AUTH_TOKEN;
+
+  if (tursoUrl && !tursoUrl.startsWith('file:')) {
+    const { createClient } = await import('@libsql/client/web');
+    return createClient({ url: tursoUrl, authToken });
+  }
+
+  fs.mkdirSync(path.dirname(localDbPath), { recursive: true });
+  const { createClient } = await import('@libsql/client');
+  const url = tursoUrl?.startsWith('file:') ? tursoUrl : `file:${localDbPath}`;
+  return createClient({ url });
+}
+
+export async function getClient() {
+  if (!clientPromise) clientPromise = createClient();
+  return clientPromise;
+}
+
+/** @returns {Promise<object|undefined>} */
+export async function get(sql, args = []) {
+  const client = await getClient();
+  const result = await client.execute({ sql, args: normalizeArgs(args) });
+  return result.rows[0] ? normalizeRow(result.rows[0]) : undefined;
+}
+
+/** @returns {Promise<object[]>} */
+export async function all(sql, args = []) {
+  const client = await getClient();
+  const result = await client.execute({ sql, args: normalizeArgs(args) });
+  return result.rows.map(normalizeRow);
+}
+
+/** @returns {Promise<{ changes: number, lastInsertRowid: number }>} */
+export async function run(sql, args = []) {
+  const client = await getClient();
+  const result = await client.execute({ sql, args: normalizeArgs(args) });
+  return {
+    changes: Number(result.rowsAffected || 0),
+    lastInsertRowid: Number(result.lastInsertRowid || 0)
+  };
+}
+
+export async function exec(sql) {
+  const client = await getClient();
+  await client.executeMultiple(sql);
+}
+
+/** Execute several statements (best-effort atomic with batch write mode). */
+export async function batch(statements) {
+  const client = await getClient();
+  const payload = statements.map((s) =>
+    typeof s === 'string'
+      ? { sql: s, args: [] }
+      : { sql: s.sql, args: normalizeArgs(s.args || []) }
+  );
+  return client.batch(payload, 'write');
+}
+
+export const SCHEMA_SQL = `
+  CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    full_name TEXT NOT NULL,
+    role TEXT NOT NULL CHECK(role IN ('teacher', 'surveillance')),
+    totp_secret TEXT,
+    totp_enabled INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS classes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT UNIQUE NOT NULL,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS students (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    class_id INTEGER NOT NULL,
+    first_name TEXT NOT NULL,
+    last_name TEXT NOT NULL,
+    photo_path TEXT,
+    points INTEGER DEFAULT 100,
+    active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (class_id) REFERENCES classes(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS point_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    points_before INTEGER NOT NULL,
+    points_change INTEGER NOT NULL,
+    points_after INTEGER NOT NULL,
+    reason TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (student_id) REFERENCES students(id),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS student_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_id INTEGER,
+    user_id INTEGER NOT NULL,
+    action TEXT NOT NULL CHECK(action IN ('add', 'remove', 'edit')),
+    student_name TEXT NOT NULL,
+    class_id INTEGER NOT NULL,
+    reason TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+
   CREATE TABLE IF NOT EXISTS user_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     target_user_id INTEGER,
@@ -20,29 +145,21 @@ db.exec(`
     created_at TEXT DEFAULT (datetime('now')),
     FOREIGN KEY (user_id) REFERENCES users(id)
   );
-`);
+`;
 
-const studentLogsSql = db.prepare(
-  "SELECT sql FROM sqlite_master WHERE type='table' AND name='student_logs'"
-).get()?.sql || '';
+let schemaReady;
 
-if (studentLogsSql && !studentLogsSql.includes("'edit'")) {
-  db.exec(`
-    CREATE TABLE student_logs_new (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      student_id INTEGER,
-      user_id INTEGER NOT NULL,
-      action TEXT NOT NULL CHECK(action IN ('add', 'remove', 'edit')),
-      student_name TEXT NOT NULL,
-      class_id INTEGER NOT NULL,
-      reason TEXT NOT NULL,
-      created_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY (user_id) REFERENCES users(id)
-    );
-    INSERT INTO student_logs_new SELECT * FROM student_logs;
-    DROP TABLE student_logs;
-    ALTER TABLE student_logs_new RENAME TO student_logs;
-  `);
+export async function ensureSchema() {
+  if (schemaReady) return schemaReady;
+  schemaReady = (async () => {
+    await exec(SCHEMA_SQL);
+    try {
+      await run('PRAGMA foreign_keys = ON');
+    } catch {
+      // ignore on remote HTTP clients that reject pragma
+    }
+  })();
+  return schemaReady;
 }
 
-export default db;
+export default { get, all, run, exec, batch, getClient, ensureSchema };

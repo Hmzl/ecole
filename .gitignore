@@ -3,4 +3,6 @@ data/
 uploads/
 *.db
 .env
+.env.local
+.vercel
 .DS_Store
