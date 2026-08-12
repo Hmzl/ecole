@@ -551,11 +551,10 @@ app.get('/api/logs/points', authMiddleware, (_req, res) => {
 });
 
 // ─── Fallback ───────────────────────────────────────────────────────────────
-
 app.get('*', (_req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
 
-app.listen(PORT, () => {
-  console.log(`\n🏫 Application École démarrée sur http://localhost:${PORT}\n`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`\n🏫 Application École démarrée sur le port ${PORT}\n`);
 });
