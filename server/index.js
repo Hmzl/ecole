@@ -15,6 +15,7 @@ import {
   deletePointLog, resetAllPoints, MAX_POINTS
 } from './admin.js';
 import { parseStudentsFile, applyStudentImport } from './import-students.js';
+import { buildStudentReport, buildClassReport, classReportToXlsx, classReportFilename } from './reports.js';
 import {
   ensureUploadsDir,
   getUploadsDir,
@@ -495,6 +496,35 @@ app.delete('/api/point-logs/:id', authMiddleware, requireRole('surveillance'), a
 }));
 
 // ─── History ────────────────────────────────────────────────────────────────
+
+app.get('/api/students/:id/report', authMiddleware, asyncHandler(async (req, res) => {
+  const period = req.query.period === 'monthly' ? 'monthly' : 'daily';
+  const value = period === 'monthly'
+    ? (req.query.month || new Date().toISOString().slice(0, 7))
+    : (req.query.date || new Date().toISOString().slice(0, 10));
+  res.json(await buildStudentReport(req.params.id, period, value));
+}));
+
+app.get('/api/classes/:classId/report', authMiddleware, asyncHandler(async (req, res) => {
+  const period = req.query.period === 'monthly' ? 'monthly' : 'daily';
+  const value = period === 'monthly'
+    ? (req.query.month || new Date().toISOString().slice(0, 7))
+    : (req.query.date || new Date().toISOString().slice(0, 10));
+  res.json(await buildClassReport(req.params.classId, period, value));
+}));
+
+app.get('/api/classes/:classId/report/export', authMiddleware, asyncHandler(async (req, res) => {
+  const period = req.query.period === 'monthly' ? 'monthly' : 'daily';
+  const value = period === 'monthly'
+    ? (req.query.month || new Date().toISOString().slice(0, 7))
+    : (req.query.date || new Date().toISOString().slice(0, 10));
+  const report = await buildClassReport(req.params.classId, period, value);
+  const buffer = classReportToXlsx(report);
+  const filename = classReportFilename(report);
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(buffer);
+}));
 
 app.get('/api/students/:id/history', authMiddleware, asyncHandler(async (req, res) => {
   const history = await all(`

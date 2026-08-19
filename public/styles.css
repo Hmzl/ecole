@@ -236,8 +236,10 @@ body {
   align-items: center;
   gap: 0.75rem;
   margin-bottom: 1.5rem;
+  flex-wrap: wrap;
 }
-.section-header h3 { font-size: 1.25rem; font-weight: 600; }
+.section-header h3 { font-size: 1.25rem; font-weight: 600; flex: 1; }
+.section-header #class-report-btn { margin-left: auto; }
 .badge {
   font-size: 0.75rem;
   background: var(--surface);
@@ -304,7 +306,31 @@ body {
 .student-points.high { color: var(--success); }
 .student-points.medium { color: var(--warning); }
 .student-points.low { color: var(--danger); }
-.points-sub { font-size: 0.75rem; color: var(--text-muted); }
+.points-sub { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem; }
+.history-scale20 { color: var(--text-muted); font-weight: 500; margin-left: 0.25rem; }
+
+.report-chart-wrap {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.75rem;
+  margin: 0.75rem 0 1rem;
+  overflow-x: auto;
+}
+.report-chart {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.report-chart-bars { min-height: 120px; }
+.chart-grid { stroke: #334155; stroke-width: 1; }
+.chart-axis, .chart-label, .chart-value { fill: #94a3b8; font-size: 11px; font-family: var(--font); }
+.chart-area { fill: rgba(79, 140, 255, 0.16); }
+.chart-line { fill: none; stroke: #4f8cff; stroke-width: 2.5; }
+.chart-track { fill: #1e293b; }
+.chart-bar.high, .chart-dot.high { fill: var(--success); }
+.chart-bar.medium, .chart-dot.medium { fill: var(--warning); }
+.chart-bar.low, .chart-dot.low { fill: var(--danger); }
 
 .delete-btn {
   background: rgba(248, 113, 113, 0.15);
@@ -440,6 +466,78 @@ body {
 .history-change.positive { color: var(--success); }
 .history-change.negative { color: var(--danger); }
 .history-meta { color: var(--text-muted); margin-top: 0.125rem; }
+
+/* ─── Reports ───────────────────────────────────────── */
+#student-report-section { margin-top: 1.5rem; border-top: 1px solid var(--border); padding-top: 1rem; }
+#student-report-section h4,
+.report-toolbar + .report-body { font-size: 0.8125rem; }
+#student-report-section h4 {
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.75rem;
+  font-size: 0.8125rem;
+}
+.report-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+.report-period-tabs { display: flex; gap: 0.25rem; }
+.report-toolbar input[type="date"],
+.report-toolbar input[type="month"] {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: var(--radius);
+  padding: 0.4rem 0.6rem;
+  font-family: var(--font);
+  font-size: 0.8125rem;
+}
+.report-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+.report-stat {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.75rem;
+  text-align: center;
+}
+.report-stat-value { display: block; font-size: 1.125rem; font-weight: 700; }
+.report-stat-label { display: block; font-size: 0.6875rem; color: var(--text-muted); margin-top: 0.2rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.report-table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
+.report-table th,
+.report-table td { padding: 0.5rem 0.4rem; text-align: left; border-bottom: 1px solid var(--border); }
+.report-table th { color: var(--text-muted); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.03em; }
+.report-table td.num, .report-table th.num { text-align: right; }
+.report-table .positive { color: var(--success); }
+.report-table .negative { color: var(--danger); }
+.report-empty { color: var(--text-muted); font-size: 0.875rem; padding: 0.75rem 0; }
+.report-note { color: var(--text-muted); font-size: 0.75rem; margin-top: 0.75rem; }
+
+@media print {
+  body * { visibility: hidden; }
+  #class-report-modal, #class-report-modal * { visibility: visible; }
+  #class-report-modal { position: static; }
+  #class-report-modal .modal-backdrop,
+  #class-report-modal .modal-close,
+  #class-report-modal .report-toolbar { display: none !important; }
+  #class-report-modal .modal-content {
+    box-shadow: none;
+    border: none;
+    max-width: none;
+    max-height: none;
+    overflow: visible;
+  }
+}
+
+/* ─── Admin ─────────────────────────────────────────── */
 
 /* ─── Tabs & Logs ───────────────────────────────────── */
 .tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
