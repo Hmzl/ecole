@@ -1,5 +1,6 @@
 const API = '/api';
 const MAX_POINTS = 100;
+const SCALE_20 = 20;
 let token = localStorage.getItem('token');
 let currentUser = null;
 let currentClassId = null;
@@ -12,6 +13,8 @@ let classToDelete = null;
 let studentToEdit = null;
 let historyToDelete = null;
 let adminUserFilter = 'all';
+let studentReportPeriod = 'daily';
+let classReportPeriod = 'daily';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
@@ -58,6 +61,165 @@ function pointsClass(pts) {
   if (n >= 80) return 'high';
   if (n >= 50) return 'medium';
   return 'low';
+}
+
+function toScale20(pts) {
+  return Math.round((Number(pts) || 0) * SCALE_20 / MAX_POINTS * 10) / 10;
+}
+
+function formatScale20(pts) {
+  const value = toScale20(pts);
+  return Number.isInteger(value) ? `${value}/20` : `${String(value).replace('.', ',')}/20`;
+}
+
+function todayISO() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function currentMonthISO() {
+  return todayISO().slice(0, 7);
+}
+
+function formatSigned(n) {
+  const v = Number(n) || 0;
+  if (v > 0) return `+${v}`;
+  if (v < 0) return `−${Math.abs(v)}`;
+  return '0';
+}
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+function barColor(pts) {
+  const n = Number(pts) || 0;
+  if (n >= 80) return '#34d399';
+  if (n >= 50) return '#fbbf24';
+  return '#f87171';
+}
+
+function studentGaugeSvg(points) {
+  const value = Math.max(0, Math.min(MAX_POINTS, Number(points) || 0));
+  const width = 360;
+  const height = 86;
+  const pad = 12;
+  const barW = width - pad * 2;
+  const barH = 22;
+  const y = 28;
+  const filled = (value / MAX_POINTS) * barW;
+  const ticks = [0, 25, 50, 75, 100];
+  return `
+    <svg class="report-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="Score ${value} sur 100">
+      <text x="${pad}" y="16" fill="#94a3b8" font-size="11">Score /100</text>
+      <text x="${width - pad}" y="16" fill="#94a3b8" font-size="11" text-anchor="end">${formatScale20(value)}</text>
+      <rect x="${pad}" y="${y}" width="${barW}" height="${barH}" rx="11" fill="#1e293b"/>
+      <rect x="${pad}" y="${y}" width="${Math.max(filled, 0)}" height="${barH}" rx="11" fill="${barColor(value)}"/>
+      ${ticks.map((t) => {
+        const x = pad + (t / MAX_POINTS) * barW;
+        return `<text x="${x}" y="${y + barH + 16}" fill="#64748b" font-size="10" text-anchor="middle">${t}</text>`;
+      }).join('')}
+    </svg>
+  `;
+}
+
+function lineChartSvg(series, title) {
+  if (!series.length) return '';
+  const width = 520;
+  const height = 180;
+  const left = 36;
+  const right = 12;
+  const top = 28;
+  const bottom = 36;
+  const plotW = width - left - right;
+  const plotH = height - top - bottom;
+  const max = MAX_POINTS;
+  const n = series.length;
+  const xAt = (i) => left + (n === 1 ? plotW / 2 : (i / (n - 1)) * plotW);
+  const yAt = (v) => top + plotH - (Math.max(0, Math.min(max, v)) / max) * plotH;
+  const points = series.map((p, i) => `${xAt(i)},${yAt(p.value)}`).join(' ');
+  const area = `${left},${top + plotH} ${points} ${xAt(n - 1)},${top + plotH}`;
+  const yTicks = [0, 50, 100];
+  const step = n > 10 ? Math.ceil(n / 6) : 1;
+  return `
+    <svg class="report-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(title)}">
+      <text x="${left}" y="16" fill="#94a3b8" font-size="11">${escapeHtml(title)}</text>
+      ${yTicks.map((t) => {
+        const y = yAt(t);
+        return `<line x1="${left}" y1="${y}" x2="${width - right}" y2="${y}" stroke="#334155" stroke-width="1"/>
+          <text x="${left - 6}" y="${y + 3}" fill="#64748b" font-size="10" text-anchor="end">${t}</text>`;
+      }).join('')}
+      <polygon points="${area}" fill="rgba(79,140,255,0.18)"/>
+      <polyline points="${points}" fill="none" stroke="#4f8cff" stroke-width="2.5" stroke-linejoin="round"/>
+      ${series.map((p, i) => `<circle cx="${xAt(i)}" cy="${yAt(p.value)}" r="3.5" fill="${barColor(p.value)}"/>`).join('')}
+      ${series.map((p, i) => (i % step === 0 || i === n - 1)
+        ? `<text x="${xAt(i)}" y="${height - 10}" fill="#64748b" font-size="9" text-anchor="middle">${escapeHtml(p.label)}</text>`
+        : '').join('')}
+    </svg>
+  `;
+}
+
+function classBarsSvg(students) {
+  const rows = students.map((s) => ({
+    name: `${s.last_name} ${s.first_name}`,
+    value: Number(s.closing.points) || 0,
+    out20: s.closing.display20
+  }));
+  const rowH = 28;
+  const width = 640;
+  const left = 150;
+  const right = 70;
+  const top = 28;
+  const height = top + rows.length * rowH + 16;
+  const barW = width - left - right;
+  return `
+    <svg class="report-chart report-chart-bars" viewBox="0 0 ${width} ${height}" role="img" aria-label="Points des élèves sur 100">
+      <text x="${left}" y="16" fill="#94a3b8" font-size="11">Points /100 (équivalent /20 à droite)</text>
+      ${rows.map((r, i) => {
+        const y = top + i * rowH;
+        const w = Math.max(2, (r.value / MAX_POINTS) * barW);
+        return `
+          <text x="${left - 8}" y="${y + 14}" fill="#cbd5e1" font-size="11" text-anchor="end">${escapeHtml(r.name)}</text>
+          <rect x="${left}" y="${y + 3}" width="${barW}" height="16" rx="8" fill="#1e293b"/>
+          <rect x="${left}" y="${y + 3}" width="${w}" height="16" rx="8" fill="${barColor(r.value)}"/>
+          <text x="${left + barW + 8}" y="${y + 15}" fill="#94a3b8" font-size="11">${r.value} · ${r.out20}</text>
+        `;
+      }).join('')}
+    </svg>
+  `;
+}
+
+function studentChartHtml(report) {
+  if (report.period === 'monthly') {
+    const start = report.range.start.slice(0, 10);
+    const endEx = report.range.end.slice(0, 10);
+    const byDay = new Map((report.days || []).map((d) => [d.date, d.closing.points]));
+    const series = [];
+    let running = report.opening.points;
+    const addDay = (ymd) => {
+      const [y, m, d] = ymd.split('-').map(Number);
+      return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+    };
+    for (let day = start; day < endEx; day = addDay(day)) {
+      if (byDay.has(day)) running = byDay.get(day);
+      series.push({ label: day.slice(8), value: running });
+    }
+    return `<div class="report-chart-wrap">${lineChartSvg(series, 'Évolution quotidienne /100')}</div>`;
+  }
+  if (report.logs?.length) {
+    const series = [
+      { label: 'Début', value: report.opening.points },
+      ...report.logs.map((l, i) => ({
+        label: String(i + 1),
+        value: l.after.points
+      }))
+    ];
+    return `<div class="report-chart-wrap">${lineChartSvg(series, 'Évolution des points /100')}</div>`;
+  }
+  return `<div class="report-chart-wrap">${studentGaugeSvg(report.closing.points)}</div>`;
 }
 
 function currentPoints(student) {
@@ -191,6 +353,9 @@ async function selectClass(id, name, el) {
 
   const students = await api(`/classes/${id}/students`);
   $('#student-count').textContent = `${students.length} élèves`;
+  const reportBtn = $('#class-report-btn');
+  if (students.length) show(reportBtn);
+  else hide(reportBtn);
   renderStudents(students);
 }
 
@@ -211,7 +376,7 @@ function renderStudents(students) {
       <div class="student-photo">${renderPhoto(student)}</div>
       <div class="student-name">${student.first_name} ${student.last_name}</div>
       <div class="student-points ${pointsClass(student.points)}">${student.points}</div>
-      <div class="points-sub">points</div>
+      <div class="points-sub">sur 100 · ${formatScale20(student.points)}</div>
     `;
 
     card.addEventListener('click', (e) => {
@@ -253,6 +418,15 @@ function openPointsModal(student) {
   `;
 
   loadHistory(student.id);
+  studentReportPeriod = 'daily';
+  $$('[data-student-report]').forEach((tab) => {
+    tab.classList.toggle('active', tab.dataset.studentReport === 'daily');
+  });
+  $('#student-report-date').value = todayISO();
+  $('#student-report-month').value = currentMonthISO();
+  hide($('#student-report-month'));
+  show($('#student-report-date'));
+  loadStudentReport();
   show($('#points-modal'));
 }
 
@@ -260,6 +434,7 @@ function updateModalPoints() {
   const display = currentPoints(selectedStudent) + pendingChange;
   $('#modal-current-points').textContent = display;
   $('#modal-current-points').className = `points-big ${pointsClass(display)}`;
+  $('#modal-points-label').textContent = `points (max. 100) · ${formatScale20(display)}`;
 }
 
 $$('.btn-points').forEach(btn => {
@@ -293,7 +468,7 @@ $('#apply-points-btn').addEventListener('click', async () => {
     });
 
     selectedStudent.points = result.points;
-    showToast(`Points mis à jour : ${result.points}`);
+    showToast(`Points mis à jour : ${result.points}/100 (${formatScale20(result.points)})`);
     hide($('#points-modal'));
     await selectClass(currentClassId, $('#current-class-name').textContent,
       $(`.class-list li[data-id="${currentClassId}"]`));
@@ -315,7 +490,8 @@ async function loadHistory(studentId) {
           <span class="history-change ${h.points_change > 0 ? 'positive' : 'negative'}">
             ${h.points_change > 0 ? '+' : ''}${h.points_change} pts
           </span>
-          → ${h.points_after} pts
+          → ${h.points_after}/100
+          <span class="history-scale20">(${formatScale20(h.points_after)})</span>
           <div class="history-meta">${h.reason} · ${h.user_name} · ${formatDate(h.created_at)}</div>
         </div>
         ${canDelete ? `<button class="history-delete-btn" data-id="${h.id}" title="Supprimer">✕</button>` : ''}
@@ -362,6 +538,7 @@ $('#confirm-delete-history-btn').addEventListener('click', async () => {
     }
 
     await loadHistory(historyToDelete.studentId);
+    await loadStudentReport();
 
     if ($('#admin-logs-panel') && !$('#admin-logs-panel').classList.contains('hidden')) {
       await loadAdminLogs('points');
@@ -371,6 +548,213 @@ $('#confirm-delete-history-btn').addEventListener('click', async () => {
       await selectClass(currentClassId, $('#current-class-name').textContent,
         $(`.class-list li[data-id="${currentClassId}"]`));
     }
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+});
+
+// ─── Reports ────────────────────────────────────────────────────────────────
+
+function reportStatsHtml(report) {
+  const netClass = report.net.points > 0 ? 'positive' : report.net.points < 0 ? 'negative' : '';
+  return `
+    <div class="report-stats">
+      <div class="report-stat">
+        <span class="report-stat-value">${report.opening.points}/100</span>
+        <span class="report-stat-label">Début · ${report.opening.display20}</span>
+      </div>
+      <div class="report-stat">
+        <span class="report-stat-value ${netClass}">${formatSigned(report.net.points)}</span>
+        <span class="report-stat-label">Variation · ${formatSigned(report.net20)}/20</span>
+      </div>
+      <div class="report-stat">
+        <span class="report-stat-value">${report.closing.points}/100</span>
+        <span class="report-stat-label">Fin · ${report.closing.display20}</span>
+      </div>
+      <div class="report-stat">
+        <span class="report-stat-value">${report.entries}</span>
+        <span class="report-stat-label">Modifications</span>
+      </div>
+    </div>
+  `;
+}
+
+async function loadStudentReport() {
+  if (!selectedStudent) return;
+  const box = $('#student-report');
+  box.innerHTML = '<p class="report-empty">Chargement…</p>';
+  try {
+    const query = studentReportPeriod === 'monthly'
+      ? `period=monthly&month=${encodeURIComponent($('#student-report-month').value || currentMonthISO())}`
+      : `period=daily&date=${encodeURIComponent($('#student-report-date').value || todayISO())}`;
+    const report = await api(`/students/${selectedStudent.id}/report?${query}`);
+    const logsHtml = report.logs.length
+      ? `<table class="report-table">
+          <thead><tr><th>Heure</th><th>Motif</th><th class="num">Δ pts</th><th class="num">/100</th><th class="num">/20</th></tr></thead>
+          <tbody>${report.logs.map((l) => `
+            <tr>
+              <td>${formatDate(l.created_at)}</td>
+              <td>${escapeHtml(l.reason)} · ${escapeHtml(l.user_name)}</td>
+              <td class="num ${l.change > 0 ? 'positive' : l.change < 0 ? 'negative' : ''}">${formatSigned(l.change)}</td>
+              <td class="num">${l.after.points}</td>
+              <td class="num">${l.after.display20}</td>
+            </tr>`).join('')}
+          </tbody></table>`
+      : '<p class="report-empty">Aucune modification sur cette période.</p>';
+
+    const daysHtml = report.days?.length
+      ? `<table class="report-table">
+          <thead><tr><th>Jour</th><th class="num">Début /100</th><th class="num">Δ</th><th class="num">Fin /100</th><th class="num">/20</th></tr></thead>
+          <tbody>${report.days.map((d) => `
+            <tr>
+              <td>${d.date}</td>
+              <td class="num">${d.opening.points}</td>
+              <td class="num ${d.net > 0 ? 'positive' : d.net < 0 ? 'negative' : ''}">${formatSigned(d.net)}</td>
+              <td class="num">${d.closing.points}</td>
+              <td class="num">${d.closing.display20}</td>
+            </tr>`).join('')}
+          </tbody></table>`
+      : '';
+
+    box.innerHTML = `
+      <p class="report-note">${report.range.label}</p>
+      ${reportStatsHtml(report)}
+      ${studentChartHtml(report)}
+      ${daysHtml}
+      ${logsHtml}
+    `;
+  } catch (err) {
+    box.innerHTML = `<p class="report-empty">${err.message}</p>`;
+  }
+}
+
+$$('[data-student-report]').forEach((tab) => {
+  tab.addEventListener('click', () => {
+    studentReportPeriod = tab.dataset.studentReport;
+    $$('[data-student-report]').forEach((t) => t.classList.toggle('active', t === tab));
+    if (studentReportPeriod === 'monthly') {
+      hide($('#student-report-date'));
+      show($('#student-report-month'));
+    } else {
+      hide($('#student-report-month'));
+      show($('#student-report-date'));
+    }
+    loadStudentReport();
+  });
+});
+
+$('#student-report-date').addEventListener('change', loadStudentReport);
+$('#student-report-month').addEventListener('change', loadStudentReport);
+
+async function loadClassReport() {
+  if (!currentClassId) return;
+  const box = $('#class-report');
+  box.innerHTML = '<p class="report-empty">Chargement…</p>';
+  try {
+    const query = classReportPeriod === 'monthly'
+      ? `period=monthly&month=${encodeURIComponent($('#class-report-month').value || currentMonthISO())}`
+      : `period=daily&date=${encodeURIComponent($('#class-report-date').value || todayISO())}`;
+    const report = await api(`/classes/${currentClassId}/report?${query}`);
+    $('#class-report-subtitle').textContent = `${report.class.name} · ${report.range.label} · moyenne ${report.average.points}/100 (${report.average.display20})`;
+
+    if (!report.students.length) {
+      box.innerHTML = '<p class="report-empty">Aucun élève dans cette classe.</p>';
+      return;
+    }
+
+    box.innerHTML = `
+      ${classBarsSvg(report.students)}
+      <table class="report-table">
+        <thead>
+          <tr>
+            <th>Élève</th>
+            <th class="num">Début /100</th>
+            <th class="num">Δ</th>
+            <th class="num">Fin /100</th>
+            <th class="num">/20</th>
+            <th class="num">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${report.students.map((s) => `
+            <tr>
+              <td>${escapeHtml(s.last_name)} ${escapeHtml(s.first_name)}</td>
+              <td class="num">${s.opening.points}</td>
+              <td class="num ${s.net.points > 0 ? 'positive' : s.net.points < 0 ? 'negative' : ''}">${formatSigned(s.net.points)}</td>
+              <td class="num">${s.closing.points}</td>
+              <td class="num">${s.closing.display20}</td>
+              <td class="num">${s.entries}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+      <p class="report-note">Le score principal est sur 100. Conversion : 5 points = 1/20. Moyenne : ${report.average.points}/100 (${report.average.display20}).</p>
+    `;
+  } catch (err) {
+    box.innerHTML = `<p class="report-empty">${err.message}</p>`;
+  }
+}
+
+$('#class-report-btn').addEventListener('click', () => {
+  classReportPeriod = 'daily';
+  $$('[data-class-report]').forEach((tab) => {
+    tab.classList.toggle('active', tab.dataset.classReport === 'daily');
+  });
+  $('#class-report-date').value = todayISO();
+  $('#class-report-month').value = currentMonthISO();
+  hide($('#class-report-month'));
+  show($('#class-report-date'));
+  show($('#class-report-modal'));
+  loadClassReport();
+});
+
+$$('[data-class-report]').forEach((tab) => {
+  tab.addEventListener('click', () => {
+    classReportPeriod = tab.dataset.classReport;
+    $$('[data-class-report]').forEach((t) => t.classList.toggle('active', t === tab));
+    if (classReportPeriod === 'monthly') {
+      hide($('#class-report-date'));
+      show($('#class-report-month'));
+    } else {
+      hide($('#class-report-month'));
+      show($('#class-report-date'));
+    }
+    loadClassReport();
+  });
+});
+
+function classReportQuery() {
+  return classReportPeriod === 'monthly'
+    ? `period=monthly&month=${encodeURIComponent($('#class-report-month').value || currentMonthISO())}`
+    : `period=daily&date=${encodeURIComponent($('#class-report-date').value || todayISO())}`;
+}
+
+$('#class-report-date').addEventListener('change', loadClassReport);
+$('#class-report-month').addEventListener('change', loadClassReport);
+$('#print-class-report-btn').addEventListener('click', () => window.print());
+
+$('#download-class-report-btn').addEventListener('click', async () => {
+  if (!currentClassId) return;
+  try {
+    const res = await fetch(`${API}/classes/${currentClassId}/report/export?${classReportQuery()}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || 'Téléchargement impossible');
+    }
+    const blob = await res.blob();
+    const match = /filename="?([^"]+)"?/i.exec(res.headers.get('Content-Disposition') || '');
+    const filename = match?.[1] || 'rapport-classe.xlsx';
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    showToast('Rapport téléchargé');
   } catch (err) {
     showToast(err.message, 'error');
   }

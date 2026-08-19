@@ -69,6 +69,7 @@
           <div class="section-header">
             <h3 id="current-class-name">Sélectionnez une classe</h3>
             <span id="student-count" class="badge"></span>
+            <button id="class-report-btn" class="btn btn-secondary btn-sm hidden" type="button">📊 Rapports</button>
           </div>
           <div id="students-grid" class="students-grid"></div>
         </section>
@@ -78,14 +79,14 @@
     <!-- Point adjustment modal -->
     <div id="points-modal" class="modal hidden">
       <div class="modal-backdrop"></div>
-      <div class="modal-content">
+      <div class="modal-content modal-lg">
         <div class="modal-header">
           <div id="modal-student-info" class="modal-student"></div>
           <button class="modal-close">&times;</button>
         </div>
         <div class="points-display">
           <span id="modal-current-points" class="points-big">100</span>
-          <span class="points-label">points (max. 100)</span>
+          <span id="modal-points-label" class="points-label">points (max. 100) · 20/20</span>
         </div>
         <div class="quick-actions">
           <button class="btn-points minus" data-change="-10">−10</button>
@@ -105,6 +106,18 @@
         <div id="history-section">
           <h4>Historique récent</h4>
           <ul id="history-list" class="history-list"></ul>
+        </div>
+        <div id="student-report-section">
+          <h4>Rapport de l'élève</h4>
+          <div class="report-toolbar">
+            <div class="report-period-tabs">
+              <button type="button" class="tab active" data-student-report="daily">Quotidien</button>
+              <button type="button" class="tab" data-student-report="monthly">Mensuel</button>
+            </div>
+            <input type="date" id="student-report-date">
+            <input type="month" id="student-report-month" class="hidden">
+          </div>
+          <div id="student-report" class="report-body"></div>
         </div>
       </div>
     </div>
@@ -433,6 +446,31 @@
           <button id="confirm-delete-btn" class="btn btn-danger">Confirmer la suppression</button>
           <button class="modal-close btn btn-ghost">Annuler</button>
         </div>
+      </div>
+    </div>
+
+    <!-- Class reports modal -->
+    <div id="class-report-modal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content modal-xl">
+        <div class="modal-header">
+          <div>
+            <h3>Rapports de classe</h3>
+            <p id="class-report-subtitle" class="admin-subtitle"></p>
+          </div>
+          <button class="modal-close">&times;</button>
+        </div>
+        <div class="report-toolbar">
+          <div class="report-period-tabs">
+            <button type="button" class="tab active" data-class-report="daily">Quotidien</button>
+            <button type="button" class="tab" data-class-report="monthly">Mensuel</button>
+          </div>
+          <input type="date" id="class-report-date">
+          <input type="month" id="class-report-month" class="hidden">
+          <button type="button" id="download-class-report-btn" class="btn btn-primary btn-sm">⬇ Télécharger</button>
+          <button type="button" id="print-class-report-btn" class="btn btn-ghost btn-sm">Imprimer</button>
+        </div>
+        <div id="class-report" class="report-body"></div>
       </div>
     </div>
 
