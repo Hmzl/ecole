@@ -301,6 +301,7 @@ $('#logout-btn').addEventListener('click', () => {
   token = null;
   currentUser = null;
   localStorage.removeItem('token');
+  closeMobileMenu();
   hide($('#dashboard-view'));
   show($('#login-view'));
   show($('#login-form'));
@@ -350,6 +351,7 @@ async function selectClass(id, name, el) {
   $$('.class-list li').forEach(li => li.classList.remove('active'));
   el.classList.add('active');
   $('#current-class-name').textContent = name;
+  closeMobileMenu();
 
   const students = await api(`/classes/${id}/students`);
   $('#student-count').textContent = `${students.length} élèves`;
@@ -1283,6 +1285,37 @@ $$('.modal-close, .modal-backdrop').forEach(el => {
   el.addEventListener('click', () => {
     el.closest('.modal') && hide(el.closest('.modal'));
   });
+});
+
+function closeMobileMenu() {
+  document.body.classList.remove('menu-open');
+  const toggle = $('#menu-toggle');
+  if (toggle) toggle.setAttribute('aria-expanded', 'false');
+  const backdrop = $('#sidebar-backdrop');
+  if (backdrop) hide(backdrop);
+}
+
+function openMobileMenu() {
+  document.body.classList.add('menu-open');
+  const toggle = $('#menu-toggle');
+  if (toggle) toggle.setAttribute('aria-expanded', 'true');
+  const backdrop = $('#sidebar-backdrop');
+  if (backdrop) show(backdrop);
+}
+
+$('#menu-toggle')?.addEventListener('click', () => {
+  if (document.body.classList.contains('menu-open')) closeMobileMenu();
+  else openMobileMenu();
+});
+
+$('#sidebar-backdrop')?.addEventListener('click', closeMobileMenu);
+
+$('#admin-dashboard-btn')?.addEventListener('click', closeMobileMenu);
+$('#add-student-btn')?.addEventListener('click', closeMobileMenu);
+$('#view-logs-btn')?.addEventListener('click', closeMobileMenu);
+
+window.addEventListener('resize', () => {
+  if (window.innerWidth > 768) closeMobileMenu();
 });
 
 // ─── Init ───────────────────────────────────────────────────────────────────
