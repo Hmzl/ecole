@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>École — Gestion des Points</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -43,6 +43,7 @@
     <div id="dashboard-view" class="view hidden">
       <header class="topbar">
         <div class="topbar-left">
+          <button type="button" id="menu-toggle" class="menu-toggle" aria-label="Ouvrir le menu" aria-expanded="false">☰</button>
           <span class="logo-small">🏫</span>
           <h2>Gestion des Points</h2>
         </div>
@@ -53,7 +54,8 @@
       </header>
 
       <main class="main-content">
-        <aside class="sidebar">
+        <div id="sidebar-backdrop" class="sidebar-backdrop hidden"></div>
+        <aside class="sidebar" id="app-sidebar">
           <h3>Classes</h3>
           <ul id="class-list" class="class-list"></ul>
           <div id="surveillance-panel" class="surveillance-panel hidden">

@@ -22,10 +22,33 @@ body {
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
+  min-height: 100dvh;
   line-height: 1.5;
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
 }
 
 .hidden { display: none !important; }
+
+.menu-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 1.25rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.menu-toggle:hover { background: var(--surface-hover); }
+
+.sidebar-backdrop {
+  display: none;
+}
 
 /* ─── Login ─────────────────────────────────────────── */
 #login-view {
@@ -102,7 +125,7 @@ body {
   border-radius: var(--radius);
   color: var(--text);
   font-family: var(--font);
-  font-size: 0.9375rem;
+  font-size: 1rem;
   transition: border-color 0.2s;
 }
 .form-group input:focus,
@@ -155,16 +178,18 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 1rem 1.5rem;
+  padding-top: calc(1rem + env(safe-area-inset-top, 0px));
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
   z-index: 100;
+  gap: 0.75rem;
 }
-.topbar-left { display: flex; align-items: center; gap: 0.75rem; }
+.topbar-left { display: flex; align-items: center; gap: 0.75rem; min-width: 0; }
 .logo-small { font-size: 1.5rem; }
-.topbar-left h2 { font-size: 1.125rem; font-weight: 600; }
-.topbar-right { display: flex; align-items: center; gap: 1rem; }
+.topbar-left h2 { font-size: 1.125rem; font-weight: 600; white-space: nowrap; }
+.topbar-right { display: flex; align-items: center; gap: 0.75rem; min-width: 0; }
 .user-badge {
   font-size: 0.8125rem;
   color: var(--text-muted);
@@ -172,6 +197,10 @@ body {
   padding: 0.375rem 0.75rem;
   border-radius: 999px;
   border: 1px solid var(--border);
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ─── Layout ────────────────────────────────────────── */
@@ -716,14 +745,113 @@ body {
 }
 
 /* ─── Responsive ────────────────────────────────────── */
+@media (hover: none) {
+  .student-card:hover { transform: none; }
+  .student-card .delete-btn,
+  .student-card .edit-btn { opacity: 1; }
+  .btn-points { min-height: 44px; }
+}
+
+@media (max-width: 900px) {
+  .modal-xl { max-width: 100%; }
+  .admin-tabs { overflow-x: auto; flex-wrap: nowrap; }
+  .admin-tab { white-space: nowrap; }
+}
+
 @media (max-width: 768px) {
-  .main-content { grid-template-columns: 1fr; }
-  .sidebar { border-right: none; border-bottom: 1px solid var(--border); }
-  .class-list { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-  .class-list li { flex: 1; min-width: 120px; text-align: center; }
+  .menu-toggle { display: inline-flex; }
+  .main-content { grid-template-columns: 1fr; min-height: calc(100dvh - 65px); }
+  .sidebar-backdrop:not(.hidden) {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 250;
+  }
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(300px, 86vw);
+    z-index: 300;
+    transform: translateX(-105%);
+    transition: transform 0.25s ease;
+    overflow-y: auto;
+    border-right: 1px solid var(--border);
+    padding: 1.25rem 1rem;
+    padding-top: calc(1rem + env(safe-area-inset-top, 0px));
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  }
+  body.menu-open .sidebar { transform: translateX(0); box-shadow: var(--shadow); }
+  body.menu-open { overflow: hidden; }
+
+  .topbar { padding: 0.75rem 1rem; padding-top: calc(0.75rem + env(safe-area-inset-top, 0px)); }
+  .topbar-left h2 { font-size: 1rem; }
+  .user-badge { max-width: 36vw; font-size: 0.75rem; padding: 0.3rem 0.55rem; }
+  #logout-btn { padding: 0.5rem 0.7rem; font-size: 0.8125rem; }
+
+  .students-section { padding: 1rem; padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); }
+  .section-header { gap: 0.5rem; margin-bottom: 1rem; }
+  .section-header h3 { font-size: 1.05rem; flex: 1 1 100%; }
+  .section-header #class-report-btn { margin-left: 0; }
+
+  .students-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+  .student-card { padding: 0.9rem 0.7rem 1rem; }
+  .student-photo { width: 64px; height: 64px; font-size: 1.5rem; }
+  .student-name { font-size: 0.8125rem; }
+  .student-points { font-size: 1.5rem; }
+
+  .class-list { display: flex; flex-direction: column; gap: 0.25rem; }
+  .class-list li { min-height: 44px; }
   .quick-actions { grid-template-columns: repeat(3, 1fr); }
   .form-row { grid-template-columns: 1fr; }
   .role-cards { grid-template-columns: 1fr; }
   .classes-table-header { display: none; }
   .classes-table-row { grid-template-columns: 1fr; gap: 0.375rem; }
+
+  .modal {
+    align-items: flex-end;
+    padding: 0;
+  }
+  .modal-content,
+  .modal-lg,
+  .modal-xl,
+  .modal-sm {
+    max-width: 100%;
+    width: 100%;
+    max-height: min(92dvh, 92vh);
+    border-radius: 20px 20px 0 0;
+    padding: 1rem 1rem calc(1rem + env(safe-area-inset-bottom, 0px));
+  }
+  .points-big { font-size: 2.4rem; }
+  .admin-panel { max-height: none; }
+  .admin-toolbar { flex-direction: column; align-items: stretch; }
+  .admin-filters { flex-wrap: wrap; }
+  .account-item { flex-direction: column; align-items: flex-start; gap: 0.75rem; }
+  .account-actions { width: 100%; }
+  .account-actions .btn { flex: 1; }
+
+  .report-toolbar input[type="date"],
+  .report-toolbar input[type="month"] { width: 100%; min-height: 44px; font-size: 1rem; }
+  .report-body { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .report-table { min-width: 520px; }
+  .report-chart-wrap { -webkit-overflow-scrolling: touch; }
+  .stats-grid { grid-template-columns: 1fr 1fr; }
+  .import-students-row input[type="file"] { min-width: 0; width: 100%; }
+
+  .toast {
+    left: 1rem;
+    right: 1rem;
+    bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@media (max-width: 420px) {
+  .students-grid { grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+  .login-card { padding: 1.5rem 1.15rem; }
+  .topbar-left h2 { display: none; }
+  .stats-grid { grid-template-columns: 1fr; }
+  .quick-actions { gap: 0.375rem; }
+  .btn-points { font-size: 0.875rem; }
 }
