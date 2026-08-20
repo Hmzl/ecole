@@ -38,7 +38,14 @@ app.use(express.json({ limit: '2mb' }));
 if (!isServerlessRuntime()) {
   app.use('/uploads', express.static(getUploadsDir()));
 }
-app.use(express.static(path.join(__dirname, '..', 'public')));
+app.use(express.static(path.join(__dirname, '..', 'public'), {
+  setHeaders(res, filePath) {
+    if (filePath.endsWith('sw.js')) {
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Service-Worker-Allowed', '/');
+    }
+  }
+}));
 
 app.use(async (_req, _res, next) => {
   try {
@@ -127,6 +134,18 @@ app.get('/api/classes', authMiddleware, asyncHandler(async (_req, res) => {
 }));
 
 // ─── Students ───────────────────────────────────────────────────────────────
+
+app.get('/api/students', authMiddleware, asyncHandler(async (_req, res) => {
+  const students = await all(`
+    SELECT s.id, s.class_id, s.first_name, s.last_name, s.photo_path, s.points,
+           c.name as class_name
+    FROM students s
+    JOIN classes c ON c.id = s.class_id
+    WHERE s.active = 1
+    ORDER BY s.last_name, s.first_name
+  `);
+  res.json(students);
+}));
 
 app.get('/api/classes/:classId/students', authMiddleware, asyncHandler(async (req, res) => {
   const students = await all(`
