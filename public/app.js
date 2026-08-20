@@ -15,6 +15,11 @@ let historyToDelete = null;
 let adminUserFilter = 'all';
 let studentReportPeriod = 'daily';
 let classReportPeriod = 'daily';
+let classStudents = [];
+let allStudents = [];
+let lastClassReport = null;
+let currentClassName = '';
+let deferredInstallPrompt = null;
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
@@ -162,34 +167,49 @@ function lineChartSvg(series, title) {
   `;
 }
 
-function classBarsSvg(students) {
-  const rows = students.map((s) => ({
-    name: `${s.last_name} ${s.first_name}`,
-    value: Number(s.closing.points) || 0,
-    out20: s.closing.display20
-  }));
-  const rowH = 28;
-  const width = 640;
-  const left = 150;
-  const right = 70;
-  const top = 28;
-  const height = top + rows.length * rowH + 16;
-  const barW = width - left - right;
+function classBarsHtml(students) {
+  if (!students.length) return '<p class="report-empty">Aucun élève à afficher.</p>';
   return `
-    <svg class="report-chart report-chart-bars" viewBox="0 0 ${width} ${height}" role="img" aria-label="Points des élèves sur 100">
-      <text x="${left}" y="16" fill="#94a3b8" font-size="11">Points /100 (équivalent /20 à droite)</text>
-      ${rows.map((r, i) => {
-        const y = top + i * rowH;
-        const w = Math.max(2, (r.value / MAX_POINTS) * barW);
+    <div class="class-bars">
+      <div class="class-bars-title">Diagramme des points /100</div>
+      ${students.map((s) => {
+        const value = Number(s.closing.points) || 0;
+        const pct = Math.max(0, Math.min(100, value));
         return `
-          <text x="${left - 8}" y="${y + 14}" fill="#cbd5e1" font-size="11" text-anchor="end">${escapeHtml(r.name)}</text>
-          <rect x="${left}" y="${y + 3}" width="${barW}" height="16" rx="8" fill="#1e293b"/>
-          <rect x="${left}" y="${y + 3}" width="${w}" height="16" rx="8" fill="${barColor(r.value)}"/>
-          <text x="${left + barW + 8}" y="${y + 15}" fill="#94a3b8" font-size="11">${r.value} · ${r.out20}</text>
+          <div class="class-bar-row">
+            <div class="class-bar-name">
+              <strong>${escapeHtml(s.last_name)}</strong>
+              <span>${escapeHtml(s.first_name)}</span>
+            </div>
+            <div class="class-bar-meter">
+              <div class="class-bar-track">
+                <div class="class-bar-fill ${pointsClass(value)}" style="width:${pct}%"></div>
+              </div>
+            </div>
+            <div class="class-bar-score">
+              <strong>${value}</strong>
+              <span>${escapeHtml(s.closing.display20)}</span>
+            </div>
+          </div>
         `;
       }).join('')}
-    </svg>
+    </div>
   `;
+}
+
+function normalizeSearch(s) {
+  return String(s || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+function matchesName(firstName, lastName, query) {
+  const q = normalizeSearch(query);
+  if (!q) return true;
+  const hay = normalizeSearch(`${lastName} ${firstName}`);
+  return q.split(/\s+/).every((part) => hay.includes(part));
 }
 
 function studentChartHtml(report) {
@@ -344,16 +364,31 @@ async function loadClasses() {
   const classOptions = classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
   $('#new-class').innerHTML = classOptions;
   $('#edit-class').innerHTML = classOptions;
+  await loadAllStudents();
+}
+
+async function loadAllStudents() {
+  try {
+    allStudents = await api('/students');
+  } catch {
+    allStudents = [];
+  }
 }
 
 async function selectClass(id, name, el) {
   currentClassId = id;
+  currentClassName = name;
   $$('.class-list li').forEach(li => li.classList.remove('active'));
   el.classList.add('active');
   $('#current-class-name').textContent = name;
   closeMobileMenu();
 
   const students = await api(`/classes/${id}/students`);
+  classStudents = students;
+  ['#student-search', '#home-search'].forEach((sel) => {
+    const input = $(sel);
+    if (input) input.value = '';
+  });
   $('#student-count').textContent = `${students.length} élèves`;
   const reportBtn = $('#class-report-btn');
   if (students.length) show(reportBtn);
@@ -361,9 +396,18 @@ async function selectClass(id, name, el) {
   renderStudents(students);
 }
 
-function renderStudents(students) {
+function renderStudents(students, options = {}) {
   const grid = $('#students-grid');
+  const showClass = Boolean(options.showClass);
   grid.innerHTML = '';
+
+  if (!students.length) {
+    const query = getSearchQuery();
+    grid.innerHTML = query
+      ? '<p class="empty-msg">Aucun élève ne correspond à la recherche.</p>'
+      : '<p class="empty-msg">Aucun élève dans cette classe.</p>';
+    return;
+  }
 
   students.forEach(student => {
     const card = document.createElement('div');
@@ -376,14 +420,18 @@ function renderStudents(students) {
         </div>
       ` : ''}
       <div class="student-photo">${renderPhoto(student)}</div>
-      <div class="student-name">${student.first_name} ${student.last_name}</div>
+      <div class="student-name">
+        <strong>${escapeHtml(student.last_name)}</strong>
+        <span>${escapeHtml(student.first_name)}</span>
+      </div>
       <div class="student-points ${pointsClass(student.points)}">${student.points}</div>
       <div class="points-sub">sur 100 · ${formatScale20(student.points)}</div>
+      ${showClass && student.class_name ? `<div class="student-class">${escapeHtml(student.class_name)}</div>` : ''}
     `;
 
-    card.addEventListener('click', (e) => {
+    card.addEventListener('click', async (e) => {
       if (e.target.closest('.card-actions')) return;
-      openPointsModal(student);
+      await openStudentFromSearch(student);
     });
 
     const editBtn = card.querySelector('.edit-btn');
@@ -660,41 +708,118 @@ async function loadClassReport() {
     $('#class-report-subtitle').textContent = `${report.class.name} · ${report.range.label} · moyenne ${report.average.points}/100 (${report.average.display20})`;
 
     if (!report.students.length) {
+      lastClassReport = null;
       box.innerHTML = '<p class="report-empty">Aucun élève dans cette classe.</p>';
       return;
     }
 
-    box.innerHTML = `
-      ${classBarsSvg(report.students)}
-      <table class="report-table">
-        <thead>
-          <tr>
-            <th>Élève</th>
-            <th class="num">Début /100</th>
-            <th class="num">Δ</th>
-            <th class="num">Fin /100</th>
-            <th class="num">/20</th>
-            <th class="num">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${report.students.map((s) => `
-            <tr>
-              <td>${escapeHtml(s.last_name)} ${escapeHtml(s.first_name)}</td>
-              <td class="num">${s.opening.points}</td>
-              <td class="num ${s.net.points > 0 ? 'positive' : s.net.points < 0 ? 'negative' : ''}">${formatSigned(s.net.points)}</td>
-              <td class="num">${s.closing.points}</td>
-              <td class="num">${s.closing.display20}</td>
-              <td class="num">${s.entries}</td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-      <p class="report-note">Le score principal est sur 100. Conversion : 5 points = 1/20. Moyenne : ${report.average.points}/100 (${report.average.display20}).</p>
-    `;
+    lastClassReport = report;
+    const search = $('#report-search');
+    if (search) search.value = '';
+    renderClassReport(report.students);
   } catch (err) {
+    lastClassReport = null;
     box.innerHTML = `<p class="report-empty">${err.message}</p>`;
   }
+}
+
+function renderClassReport(students) {
+  const box = $('#class-report');
+  const report = lastClassReport;
+  if (!report) return;
+
+  if (!students.length) {
+    box.innerHTML = '<p class="report-empty">Aucun élève ne correspond à la recherche.</p>';
+    return;
+  }
+
+  box.innerHTML = `
+    ${classBarsHtml(students)}
+    <table class="report-table">
+      <thead>
+        <tr>
+          <th>Nom</th>
+          <th>Prénom</th>
+          <th class="num">Début /100</th>
+          <th class="num">Δ</th>
+          <th class="num">Fin /100</th>
+          <th class="num">/20</th>
+          <th class="num">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${students.map((s) => `
+          <tr>
+            <td>${escapeHtml(s.last_name)}</td>
+            <td>${escapeHtml(s.first_name)}</td>
+            <td class="num">${s.opening.points}</td>
+            <td class="num ${s.net.points > 0 ? 'positive' : s.net.points < 0 ? 'negative' : ''}">${formatSigned(s.net.points)}</td>
+            <td class="num">${s.closing.points}</td>
+            <td class="num">${s.closing.display20}</td>
+            <td class="num">${s.entries}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+    <p class="report-note">Le score principal est sur 100. Conversion : 5 points = 1/20. Moyenne : ${report.average.points}/100 (${report.average.display20}).</p>
+  `;
+}
+
+function getSearchQuery() {
+  return ($('#home-search')?.value || $('#student-search')?.value || '').trim();
+}
+
+function syncSearchInputs(query, sourceId) {
+  ['home-search', 'student-search'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el && el.id !== sourceId && el.value !== query) el.value = query;
+  });
+}
+
+async function openStudentFromSearch(student) {
+  if (student.class_id != null && Number(student.class_id) !== Number(currentClassId)) {
+    const li = document.querySelector(`.class-list li[data-id="${student.class_id}"]`);
+    if (li) {
+      await selectClass(student.class_id, student.class_name || currentClassName, li);
+    }
+  }
+  const fresh = classStudents.find((s) => Number(s.id) === Number(student.id)) || student;
+  openPointsModal(fresh);
+}
+
+function applyStudentSearch(sourceId) {
+  const raw = sourceId
+    ? (document.getElementById(sourceId)?.value || '')
+    : ($('#home-search')?.value || $('#student-search')?.value || '');
+  syncSearchInputs(raw, sourceId);
+  const query = raw.trim();
+
+  if (query && allStudents.length) {
+    const filtered = allStudents.filter((s) => matchesName(s.first_name, s.last_name, query));
+    $('#current-class-name').textContent = 'Recherche';
+    $('#student-count').textContent = `${filtered.length} / ${allStudents.length} élèves`;
+    hide($('#class-report-btn'));
+    renderStudents(filtered, { showClass: true });
+    return;
+  }
+
+  if (currentClassName) $('#current-class-name').textContent = currentClassName;
+  const filtered = classStudents.filter((s) => matchesName(s.first_name, s.last_name, query));
+  const total = classStudents.length;
+  $('#student-count').textContent = query
+    ? `${filtered.length} / ${total} élèves`
+    : `${total} élèves`;
+  const reportBtn = $('#class-report-btn');
+  if (!query && total) show(reportBtn);
+  else if (reportBtn) hide(reportBtn);
+  renderStudents(filtered);
+}
+
+function applyReportSearch() {
+  if (!lastClassReport) return;
+  const query = $('#report-search')?.value || '';
+  const filtered = lastClassReport.students.filter((s) => matchesName(s.first_name, s.last_name, query));
+  renderClassReport(filtered);
 }
 
 $('#class-report-btn').addEventListener('click', () => {
@@ -733,6 +858,9 @@ function classReportQuery() {
 
 $('#class-report-date').addEventListener('change', loadClassReport);
 $('#class-report-month').addEventListener('change', loadClassReport);
+$('#student-search')?.addEventListener('input', () => applyStudentSearch('student-search'));
+$('#home-search')?.addEventListener('input', () => applyStudentSearch('home-search'));
+$('#report-search')?.addEventListener('input', applyReportSearch);
 $('#print-class-report-btn').addEventListener('click', () => window.print());
 
 $('#download-class-report-btn').addEventListener('click', async () => {
@@ -1317,6 +1445,62 @@ $('#view-logs-btn')?.addEventListener('click', closeMobileMenu);
 window.addEventListener('resize', () => {
   if (window.innerWidth > 768) closeMobileMenu();
 });
+
+// ─── Installer l'application (écran d'accueil) ─────────────────────────────
+
+function isStandaloneApp() {
+  return window.matchMedia('(display-mode: standalone)').matches
+    || window.navigator.standalone === true;
+}
+
+function isIosDevice() {
+  return /iphone|ipad|ipod/i.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+function updateInstallButtons() {
+  $$('.install-app-btn').forEach((btn) => {
+    if (isStandaloneApp()) hide(btn);
+    else show(btn);
+  });
+}
+
+async function handleInstallApp() {
+  if (deferredInstallPrompt) {
+    deferredInstallPrompt.prompt();
+    await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt = null;
+    updateInstallButtons();
+    return;
+  }
+  if (isIosDevice()) {
+    show($('#install-help-modal'));
+    return;
+  }
+  show($('#install-help-modal'));
+}
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  updateInstallButtons();
+});
+
+window.addEventListener('appinstalled', () => {
+  deferredInstallPrompt = null;
+  updateInstallButtons();
+  showToast('Application ajoutée à l’écran d’accueil');
+});
+
+$$('.install-app-btn').forEach((btn) => {
+  btn.addEventListener('click', handleInstallApp);
+});
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
+
+updateInstallButtons();
 
 // ─── Init ───────────────────────────────────────────────────────────────────
 

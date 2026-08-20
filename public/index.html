@@ -3,7 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>École — Gestion des Points</title>
+  <title>École</title>
+  <meta name="theme-color" content="#0f1419">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="École">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&display=swap" rel="stylesheet">
@@ -15,8 +23,8 @@
     <div id="login-view" class="view">
       <div class="login-card">
         <div class="login-header">
-          <div class="logo">🏫</div>
-          <h1>Gestion Scolaire</h1>
+          <img src="/icons/icon-192.png" alt="" class="logo-img" width="88" height="88">
+          <h1>École</h1>
           <p>Accès réservé aux enseignants et à la surveillance</p>
         </div>
 
@@ -35,6 +43,10 @@
           <button type="submit" class="btn btn-primary btn-full">Se connecter</button>
         </form>
 
+        <button type="button" id="install-app-btn" class="btn btn-secondary btn-full install-app-btn">
+          📲 Ajouter à l’écran d’accueil
+        </button>
+
         <div id="login-error" class="error-msg hidden"></div>
       </div>
     </div>
@@ -44,10 +56,15 @@
       <header class="topbar">
         <div class="topbar-left">
           <button type="button" id="menu-toggle" class="menu-toggle" aria-label="Ouvrir le menu" aria-expanded="false">☰</button>
-          <span class="logo-small">🏫</span>
-          <h2>Gestion des Points</h2>
+          <img src="/icons/icon-192.png" alt="" class="logo-small" width="36" height="36">
+          <h2>École</h2>
         </div>
+        <label class="search-field topbar-search">
+          <span class="search-icon" aria-hidden="true">🔎</span>
+          <input type="search" id="home-search" placeholder="Rechercher nom ou prénom" autocomplete="off">
+        </label>
         <div class="topbar-right">
+          <button type="button" id="install-app-btn-bar" class="btn btn-ghost btn-install install-app-btn" title="Ajouter à l’écran d’accueil">📲</button>
           <span id="user-info" class="user-badge"></span>
           <button id="logout-btn" class="btn btn-ghost">Déconnexion</button>
         </div>
@@ -72,6 +89,10 @@
             <h3 id="current-class-name">Sélectionnez une classe</h3>
             <span id="student-count" class="badge"></span>
             <button id="class-report-btn" class="btn btn-secondary btn-sm hidden" type="button">📊 Rapports</button>
+            <label class="search-field">
+              <span class="search-icon" aria-hidden="true">🔎</span>
+              <input type="search" id="student-search" placeholder="Rechercher nom ou prénom" autocomplete="off">
+            </label>
           </div>
           <div id="students-grid" class="students-grid"></div>
         </section>
@@ -469,14 +490,36 @@
           </div>
           <input type="date" id="class-report-date">
           <input type="month" id="class-report-month" class="hidden">
-          <button type="button" id="download-class-report-btn" class="btn btn-primary btn-sm">⬇ Télécharger</button>
-          <button type="button" id="print-class-report-btn" class="btn btn-ghost btn-sm">Imprimer</button>
+          <label class="search-field">
+            <span class="search-icon" aria-hidden="true">🔎</span>
+            <input type="search" id="report-search" placeholder="Rechercher un élève" autocomplete="off">
+          </label>
+          <div class="report-actions">
+            <button type="button" id="download-class-report-btn" class="btn btn-primary btn-sm">⬇ Télécharger</button>
+            <button type="button" id="print-class-report-btn" class="btn btn-secondary btn-sm">🖨 Imprimer</button>
+          </div>
         </div>
         <div id="class-report" class="report-body"></div>
       </div>
     </div>
 
     <!-- Toast -->
+    <div id="install-help-modal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content modal-sm">
+        <div class="modal-header">
+          <h3>Ajouter à l’accueil</h3>
+          <button class="modal-close" type="button">&times;</button>
+        </div>
+        <ol class="install-help-steps">
+          <li>Appuyez sur le bouton <strong>Partager</strong> <span aria-hidden="true">□↑</span> en bas de Safari.</li>
+          <li>Choisissez <strong>Sur l’écran d’accueil</strong>.</li>
+          <li>Validez avec <strong>Ajouter</strong> — l’icône École apparaît sur votre téléphone.</li>
+        </ol>
+        <p class="install-help-note">Sur Android, ouvrez le menu du navigateur puis <strong>Ajouter à l’écran d’accueil</strong> ou <strong>Installer l’application</strong>.</p>
+      </div>
+    </div>
+
     <div id="toast" class="toast hidden"></div>
   </div>
 
