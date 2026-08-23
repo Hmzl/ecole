@@ -107,27 +107,30 @@ function barColor(pts) {
   return '#f87171';
 }
 
-function studentGaugeSvg(points) {
+function studentScoreCircle(points, display20) {
   const value = Math.max(0, Math.min(MAX_POINTS, Number(points) || 0));
-  const width = 360;
-  const height = 86;
-  const pad = 12;
-  const barW = width - pad * 2;
-  const barH = 22;
-  const y = 28;
-  const filled = (value / MAX_POINTS) * barW;
-  const ticks = [0, 25, 50, 75, 100];
+  const size = 180;
+  const stroke = 14;
+  const radius = (size - stroke) / 2;
+  const circ = 2 * Math.PI * radius;
+  const offset = circ * (1 - value / MAX_POINTS);
+  const color = barColor(value);
+  const scale20 = display20 || formatScale20(value);
   return `
-    <svg class="report-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="Score ${value} sur 100">
-      <text x="${pad}" y="16" fill="#94a3b8" font-size="11">Score /100</text>
-      <text x="${width - pad}" y="16" fill="#94a3b8" font-size="11" text-anchor="end">${formatScale20(value)}</text>
-      <rect x="${pad}" y="${y}" width="${barW}" height="${barH}" rx="11" fill="#1e293b"/>
-      <rect x="${pad}" y="${y}" width="${Math.max(filled, 0)}" height="${barH}" rx="11" fill="${barColor(value)}"/>
-      ${ticks.map((t) => {
-        const x = pad + (t / MAX_POINTS) * barW;
-        return `<text x="${x}" y="${y + barH + 16}" fill="#64748b" font-size="10" text-anchor="middle">${t}</text>`;
-      }).join('')}
-    </svg>
+    <div class="score-circle-wrap">
+      <svg class="score-circle" viewBox="0 0 ${size} ${size}" role="img" aria-label="Score ${value} sur 100">
+        <circle cx="${size / 2}" cy="${size / 2}" r="${radius}" fill="none" stroke="#1e293b" stroke-width="${stroke}"/>
+        <circle class="score-circle-fill" cx="${size / 2}" cy="${size / 2}" r="${radius}" fill="none"
+          stroke="${color}" stroke-width="${stroke}" stroke-linecap="round"
+          stroke-dasharray="${circ.toFixed(2)}" stroke-dashoffset="${offset.toFixed(2)}"
+          transform="rotate(-90 ${size / 2} ${size / 2})"/>
+      </svg>
+      <div class="score-circle-label">
+        <strong>${value}</strong>
+        <span>/100</span>
+        <em>${escapeHtml(scale20)}</em>
+      </div>
+    </div>
   `;
 }
 
@@ -213,6 +216,7 @@ function matchesName(firstName, lastName, query) {
 }
 
 function studentChartHtml(report) {
+  const circle = studentScoreCircle(report.closing.points, report.closing.display20);
   if (report.period === 'monthly') {
     const start = report.range.start.slice(0, 10);
     const endEx = report.range.end.slice(0, 10);
@@ -227,7 +231,7 @@ function studentChartHtml(report) {
       if (byDay.has(day)) running = byDay.get(day);
       series.push({ label: day.slice(8), value: running });
     }
-    return `<div class="report-chart-wrap">${lineChartSvg(series, 'Évolution quotidienne /100')}</div>`;
+    return `${circle}<div class="report-chart-wrap">${lineChartSvg(series, 'Évolution quotidienne /100')}</div>`;
   }
   if (report.logs?.length) {
     const series = [
@@ -237,9 +241,9 @@ function studentChartHtml(report) {
         value: l.after.points
       }))
     ];
-    return `<div class="report-chart-wrap">${lineChartSvg(series, 'Évolution des points /100')}</div>`;
+    return `${circle}<div class="report-chart-wrap">${lineChartSvg(series, 'Évolution des points /100')}</div>`;
   }
-  return `<div class="report-chart-wrap">${studentGaugeSvg(report.closing.points)}</div>`;
+  return circle;
 }
 
 function currentPoints(student) {

@@ -423,6 +423,47 @@ body {
 }
 .history-scale20 { color: var(--text-muted); font-weight: 500; margin-left: 0.25rem; }
 
+.score-circle-wrap {
+  position: relative;
+  width: 180px;
+  height: 180px;
+  margin: 0.75rem auto 1.1rem;
+}
+.score-circle {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.score-circle-fill {
+  transition: stroke-dashoffset 0.55s ease;
+}
+.score-circle-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  text-align: center;
+}
+.score-circle-label strong {
+  font-size: 2.35rem;
+  font-weight: 700;
+  line-height: 1;
+}
+.score-circle-label span {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 0.15rem;
+}
+.score-circle-label em {
+  font-style: normal;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  margin-top: 0.2rem;
+}
+
 .report-chart-wrap {
   background: var(--bg);
   border: 1px solid var(--border);
