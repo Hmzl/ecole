@@ -14,16 +14,16 @@ if (userCount === 0) {
   const hashSurveillance = bcrypt.hashSync('Surveillance123!', 12);
 
   await run(
-    'INSERT INTO users (username, password_hash, full_name, role) VALUES (?, ?, ?, ?)',
-    ['prof.martin', hashTeacher, 'Marie Martin', 'teacher']
+    'INSERT INTO users (username, password_hash, full_name, role, email, subject) VALUES (?, ?, ?, ?, ?, ?)',
+    ['prof.martin', hashTeacher, 'Marie Martin', 'teacher', 'prof.martin@ecole.local', 'Mathématiques']
   );
   await run(
-    'INSERT INTO users (username, password_hash, full_name, role) VALUES (?, ?, ?, ?)',
-    ['prof.dubois', hashTeacher, 'Pierre Dubois', 'teacher']
+    'INSERT INTO users (username, password_hash, full_name, role, email, subject) VALUES (?, ?, ?, ?, ?, ?)',
+    ['prof.dubois', hashTeacher, 'Pierre Dubois', 'teacher', 'prof.dubois@ecole.local', 'Arabe']
   );
   await run(
-    'INSERT INTO users (username, password_hash, full_name, role) VALUES (?, ?, ?, ?)',
-    ['surveillance', hashSurveillance, 'Direction Surveillance', 'surveillance']
+    'INSERT INTO users (username, password_hash, full_name, role, email, subject) VALUES (?, ?, ?, ?, ?, ?)',
+    ['surveillance', hashSurveillance, 'Direction Surveillance', 'surveillance', 'surveillance@ecole.local', null]
   );
 
   for (const { className, students } of CLASSES_ELEVES) {

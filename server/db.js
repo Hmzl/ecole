@@ -89,6 +89,8 @@ export const SCHEMA_SQL = `
     role TEXT NOT NULL CHECK(role IN ('teacher', 'surveillance')),
     totp_secret TEXT,
     totp_enabled INTEGER DEFAULT 0,
+    email TEXT,
+    subject TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   );
 
@@ -153,6 +155,16 @@ export async function ensureSchema() {
   if (schemaReady) return schemaReady;
   schemaReady = (async () => {
     await exec(SCHEMA_SQL);
+    for (const sql of [
+      'ALTER TABLE users ADD COLUMN email TEXT',
+      'ALTER TABLE users ADD COLUMN subject TEXT'
+    ]) {
+      try {
+        await run(sql);
+      } catch {
+        // column already exists
+      }
+    }
     try {
       await run('PRAGMA foreign_keys = ON');
     } catch {

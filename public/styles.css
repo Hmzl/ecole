@@ -109,6 +109,35 @@ body {
 }
 .toggle-password:hover { opacity: 1; }
 
+.forgot-link {
+  display: block;
+  width: 100%;
+  margin: 0.85rem 0 0;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--primary);
+  font-family: var(--font);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: center;
+}
+.forgot-link:hover { text-decoration: underline; }
+#forgot-form { margin-top: 0.25rem; }
+#forgot-form .btn-ghost { margin-top: 0.5rem; }
+
+.success-msg {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background: rgba(52, 211, 153, 0.15);
+  border: 1px solid rgba(52, 211, 153, 0.3);
+  border-radius: var(--radius);
+  color: var(--success, #34d399);
+  font-size: 0.875rem;
+  text-align: center;
+}
+
 .hint {
   font-weight: 400;
   color: var(--text-muted);

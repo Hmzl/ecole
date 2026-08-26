@@ -181,7 +181,18 @@ const I18N = {
     actionDelete: '− Suppression',
     appInstalled: 'Application ajoutée à l’écran d’accueil',
     pdfAverage: 'Moyenne : {avg}/100 ({avg20})',
-    importConfirm: 'Importer « {name} » ?\nLes élèves actifs actuels seront remplacés par la liste du fichier.'
+    importConfirm: 'Importer « {name} » ?\nLes élèves actifs actuels seront remplacés par la liste du fichier.',
+    email: 'E-mail',
+    emailPlaceholder: 'Ex: prof.martin@ecole.ma',
+    teacherSubject: 'Matière enseignée',
+    subjectPlaceholder: 'Ex: Mathématiques, Arabe, Français…',
+    subjectRequired: 'Indiquez la matière de l’enseignant',
+    emailRequired: 'L’e-mail est requis',
+    forgotPassword: 'Mot de passe oublié ?',
+    forgotIdentifier: 'Nom d’utilisateur ou e-mail',
+    sendPassword: 'Envoyer un nouveau mot de passe',
+    forgotSent: 'Si un compte correspond, un e-mail a été envoyé.',
+    backToLogin: 'Retour à la connexion'
   },
   ar: {
     appName: 'المدرسة',
@@ -365,7 +376,18 @@ const I18N = {
     actionDelete: '− حذف',
     appInstalled: 'تمت إضافة التطبيق إلى الشاشة الرئيسية',
     pdfAverage: 'المعدل: {avg}/100 ({avg20})',
-    importConfirm: 'استيراد « {name} »؟\nسيتم استبدال التلاميذ النشطين الحاليين بقائمة الملف.'
+    importConfirm: 'استيراد « {name} »؟\nسيتم استبدال التلاميذ النشطين الحاليين بقائمة الملف.',
+    email: 'البريد الإلكتروني',
+    emailPlaceholder: 'مثال: prof.martin@ecole.ma',
+    teacherSubject: 'المادة المدرسة',
+    subjectPlaceholder: 'مثال: الرياضيات، العربية، الفرنسية…',
+    subjectRequired: 'حدد مادة الأستاذ',
+    emailRequired: 'البريد الإلكتروني مطلوب',
+    forgotPassword: 'نسيت كلمة المرور؟',
+    forgotIdentifier: 'اسم المستخدم أو البريد الإلكتروني',
+    sendPassword: 'إرسال كلمة مرور جديدة',
+    forgotSent: 'إذا وُجد حساب مطابق، فقد أُرسل بريد إلكتروني.',
+    backToLogin: 'العودة لتسجيل الدخول'
   }
 };
 

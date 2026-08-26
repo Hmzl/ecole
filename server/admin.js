@@ -85,7 +85,7 @@ export async function getAdminStats() {
 
 export async function listAdminUsers(currentUserId) {
   const users = await all(`
-    SELECT id, username, full_name, role, created_at
+    SELECT id, username, full_name, role, email, subject, created_at
     FROM users
     ORDER BY role DESC, full_name
   `);
@@ -106,36 +106,53 @@ export async function listAdminClasses() {
   `);
 }
 
-export async function createAdminUser(actorId, { username, password, fullName, role, reason }) {
-  if (!username?.trim() || !fullName?.trim() || !reason?.trim()) {
-    throw Object.assign(new Error('Tous les champs sont requis, y compris le motif'), { status: 400 });
+function normalizeEmail(email) {
+  const value = String(email || '').trim().toLowerCase();
+  if (!value) return '';
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+    throw Object.assign(new Error('Adresse e-mail invalide'), { status: 400 });
+  }
+  return value;
+}
+
+export async function createAdminUser(actorId, { username, password, fullName, role, email, subject }) {
+  if (!username?.trim() || !fullName?.trim()) {
+    throw Object.assign(new Error('Nom et identifiant requis'), { status: 400 });
   }
   if (!VALID_ROLES.includes(role)) {
     throw Object.assign(new Error('Rôle invalide'), { status: 400 });
+  }
+  const mail = normalizeEmail(email);
+  if (!mail) throw Object.assign(new Error('L\'e-mail est requis'), { status: 400 });
+  const matter = role === 'teacher' ? String(subject || '').trim() : '';
+  if (role === 'teacher' && !matter) {
+    throw Object.assign(new Error('La matière est requise pour un enseignant'), { status: 400 });
   }
   const pwdError = validatePassword(password);
   if (pwdError) throw Object.assign(new Error(pwdError), { status: 400 });
 
   const existing = await get('SELECT id FROM users WHERE username = ?', [username.trim()]);
   if (existing) throw Object.assign(new Error('Ce nom d\'utilisateur existe déjà'), { status: 409 });
+  const emailTaken = await get('SELECT id FROM users WHERE lower(email) = ?', [mail]);
+  if (emailTaken) throw Object.assign(new Error('Cet e-mail est déjà utilisé'), { status: 409 });
 
   const hash = bcrypt.hashSync(password, 12);
   const result = await run(`
-    INSERT INTO users (username, password_hash, full_name, role)
-    VALUES (?, ?, ?, ?)
-  `, [username.trim(), hash, fullName.trim(), role]);
+    INSERT INTO users (username, password_hash, full_name, role, email, subject)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `, [username.trim(), hash, fullName.trim(), role, mail, matter || null]);
 
   await run(`
     INSERT INTO user_logs (target_user_id, user_id, action, target_name, reason)
     VALUES (?, ?, 'add', ?, ?)
-  `, [result.lastInsertRowid, actorId, fullName.trim(), reason.trim()]);
+  `, [result.lastInsertRowid, actorId, fullName.trim(), role === 'teacher' ? `Compte enseignant (${matter})` : 'Compte surveillance']);
 
   return result.lastInsertRowid;
 }
 
-export async function updateAdminUser(actorId, userId, { username, password, fullName, role, reason }) {
-  if (!username?.trim() || !fullName?.trim() || !reason?.trim()) {
-    throw Object.assign(new Error('Nom, identifiant et motif requis'), { status: 400 });
+export async function updateAdminUser(actorId, userId, { username, password, fullName, role, email, subject }) {
+  if (!username?.trim() || !fullName?.trim()) {
+    throw Object.assign(new Error('Nom et identifiant requis'), { status: 400 });
   }
   if (role && !VALID_ROLES.includes(role)) {
     throw Object.assign(new Error('Rôle invalide'), { status: 400 });
@@ -147,7 +164,16 @@ export async function updateAdminUser(actorId, userId, { username, password, ful
   const duplicate = await get('SELECT id FROM users WHERE username = ? AND id != ?', [username.trim(), user.id]);
   if (duplicate) throw Object.assign(new Error('Ce nom d\'utilisateur existe déjà'), { status: 409 });
 
+  const mail = normalizeEmail(email);
+  if (!mail) throw Object.assign(new Error('L\'e-mail est requis'), { status: 400 });
+  const emailTaken = await get('SELECT id FROM users WHERE lower(email) = ? AND id != ?', [mail, user.id]);
+  if (emailTaken) throw Object.assign(new Error('Cet e-mail est déjà utilisé'), { status: 409 });
+
   const newRole = role || user.role;
+  const matter = newRole === 'teacher' ? String(subject || '').trim() : '';
+  if (newRole === 'teacher' && !matter) {
+    throw Object.assign(new Error('La matière est requise pour un enseignant'), { status: 400 });
+  }
   if (user.role === 'surveillance' && newRole !== 'surveillance' && (await countSurveillanceUsers(user.id)) === 0) {
     throw Object.assign(new Error('Impossible de retirer le dernier compte surveillance'), { status: 400 });
   }
@@ -157,20 +183,20 @@ export async function updateAdminUser(actorId, userId, { username, password, ful
     if (pwdError) throw Object.assign(new Error(pwdError), { status: 400 });
     const hash = bcrypt.hashSync(password, 12);
     await run(
-      'UPDATE users SET username = ?, full_name = ?, role = ?, password_hash = ? WHERE id = ?',
-      [username.trim(), fullName.trim(), newRole, hash, user.id]
+      'UPDATE users SET username = ?, full_name = ?, role = ?, email = ?, subject = ?, password_hash = ? WHERE id = ?',
+      [username.trim(), fullName.trim(), newRole, mail, matter || null, hash, user.id]
     );
   } else {
     await run(
-      'UPDATE users SET username = ?, full_name = ?, role = ? WHERE id = ?',
-      [username.trim(), fullName.trim(), newRole, user.id]
+      'UPDATE users SET username = ?, full_name = ?, role = ?, email = ?, subject = ? WHERE id = ?',
+      [username.trim(), fullName.trim(), newRole, mail, matter || null, user.id]
     );
   }
 
   await run(`
     INSERT INTO user_logs (target_user_id, user_id, action, target_name, reason)
     VALUES (?, ?, 'edit', ?, ?)
-  `, [user.id, actorId, fullName.trim(), reason.trim()]);
+  `, [user.id, actorId, fullName.trim(), newRole === 'teacher' ? `Mise à jour enseignant (${matter})` : 'Mise à jour du compte']);
 }
 
 export async function deleteAdminUser(actorId, userId, reason) {

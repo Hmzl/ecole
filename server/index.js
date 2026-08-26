@@ -16,6 +16,7 @@ import {
 } from './admin.js';
 import { parseStudentsFile, applyStudentImport } from './import-students.js';
 import { buildStudentReport, buildClassReport, classReportToXlsx, classReportFilename } from './reports.js';
+import { mailConfigured, sendTempPasswordEmail, generateTempPassword } from './mail.js';
 import {
   ensureUploadsDir,
   getUploadsDir,
@@ -102,7 +103,9 @@ app.post('/api/auth/login', authLimiter, asyncHandler(async (req, res) => {
     id: user.id,
     username: user.username,
     fullName: user.full_name,
-    role: user.role
+    role: user.role,
+    email: user.email || null,
+    subject: user.subject || null
   });
 
   res.json({
@@ -111,9 +114,38 @@ app.post('/api/auth/login', authLimiter, asyncHandler(async (req, res) => {
       id: user.id,
       username: user.username,
       fullName: user.full_name,
-      role: user.role
+      role: user.role,
+      email: user.email || null,
+      subject: user.subject || null
     }
   });
+}));
+
+app.post('/api/auth/forgot-password', authLimiter, asyncHandler(async (req, res) => {
+  const identifier = String(req.body.identifier || req.body.username || req.body.email || '').trim();
+  if (!identifier) {
+    return res.status(400).json({ error: 'Nom d\'utilisateur ou e-mail requis' });
+  }
+  if (!mailConfigured()) {
+    return res.status(503).json({ error: 'L\'envoi d\'e-mail n\'est pas configuré. Contactez la surveillance.' });
+  }
+
+  const user = await get(
+    'SELECT * FROM users WHERE username = ? OR lower(email) = ?',
+    [identifier, identifier.toLowerCase()]
+  );
+
+  const generic = { message: 'Si un compte correspond, un e-mail a été envoyé.' };
+  if (!user?.email) {
+    return res.json(generic);
+  }
+
+  const tempPassword = generateTempPassword();
+  await sendTempPasswordEmail(user, tempPassword);
+  const hash = bcrypt.hashSync(tempPassword, 12);
+  await run('UPDATE users SET password_hash = ? WHERE id = ?', [hash, user.id]);
+
+  res.json(generic);
 }));
 
 app.get('/api/auth/me', authMiddleware, (req, res) => {
@@ -308,7 +340,7 @@ app.put('/api/students/:id', authMiddleware, requireRole('surveillance'), upload
 
 app.get('/api/teachers', authMiddleware, requireRole('surveillance'), asyncHandler(async (_req, res) => {
   const teachers = await all(`
-    SELECT id, username, full_name, created_at
+    SELECT id, username, full_name, email, subject, created_at
     FROM users WHERE role = 'teacher'
     ORDER BY full_name
   `);
@@ -316,77 +348,31 @@ app.get('/api/teachers', authMiddleware, requireRole('surveillance'), asyncHandl
 }));
 
 app.post('/api/teachers', authMiddleware, requireRole('surveillance'), asyncHandler(async (req, res) => {
-  const { username, password, fullName, reason } = req.body;
-
-  if (!username?.trim() || !password || !fullName?.trim() || !reason?.trim()) {
-    return res.status(400).json({ error: 'Tous les champs sont requis, y compris le motif' });
+  try {
+    const id = await createAdminUser(req.user.id, { ...req.body, role: 'teacher' });
+    res.status(201).json({
+      id,
+      username: String(req.body.username || '').trim(),
+      fullName: String(req.body.fullName || '').trim(),
+      message: 'Enseignant ajouté avec succès'
+    });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
   }
-  if (password.length < 8) {
-    return res.status(400).json({ error: 'Le mot de passe doit contenir au moins 8 caractères' });
-  }
-
-  const existing = await get('SELECT id FROM users WHERE username = ?', [username.trim()]);
-  if (existing) return res.status(409).json({ error: 'Ce nom d\'utilisateur existe déjà' });
-
-  const hash = bcrypt.hashSync(password, 12);
-  const result = await run(`
-    INSERT INTO users (username, password_hash, full_name, role)
-    VALUES (?, ?, ?, 'teacher')
-  `, [username.trim(), hash, fullName.trim()]);
-
-  await run(`
-    INSERT INTO user_logs (target_user_id, user_id, action, target_name, reason)
-    VALUES (?, ?, 'add', ?, ?)
-  `, [result.lastInsertRowid, req.user.id, fullName.trim(), reason.trim()]);
-
-  res.status(201).json({
-    id: result.lastInsertRowid,
-    username: username.trim(),
-    fullName: fullName.trim(),
-    message: 'Enseignant ajouté avec succès'
-  });
 }));
 
 app.put('/api/teachers/:id', authMiddleware, requireRole('surveillance'), asyncHandler(async (req, res) => {
-  const { username, password, fullName, reason } = req.body;
-
-  if (!username?.trim() || !fullName?.trim() || !reason?.trim()) {
-    return res.status(400).json({ error: 'Nom, identifiant et motif requis' });
+  try {
+    await updateAdminUser(req.user.id, parseInt(req.params.id, 10), { ...req.body, role: 'teacher' });
+    res.json({
+      id: parseInt(req.params.id, 10),
+      username: String(req.body.username || '').trim(),
+      fullName: String(req.body.fullName || '').trim(),
+      message: 'Enseignant modifié avec succès'
+    });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
   }
-
-  const teacher = await get('SELECT * FROM users WHERE id = ? AND role = ?', [req.params.id, 'teacher']);
-  if (!teacher) return res.status(404).json({ error: 'Enseignant introuvable' });
-
-  const duplicate = await get('SELECT id FROM users WHERE username = ? AND id != ?', [username.trim(), teacher.id]);
-  if (duplicate) return res.status(409).json({ error: 'Ce nom d\'utilisateur existe déjà' });
-
-  if (password) {
-    if (password.length < 8) {
-      return res.status(400).json({ error: 'Le mot de passe doit contenir au moins 8 caractères' });
-    }
-    const hash = bcrypt.hashSync(password, 12);
-    await run(
-      'UPDATE users SET username = ?, full_name = ?, password_hash = ? WHERE id = ?',
-      [username.trim(), fullName.trim(), hash, teacher.id]
-    );
-  } else {
-    await run(
-      'UPDATE users SET username = ?, full_name = ? WHERE id = ?',
-      [username.trim(), fullName.trim(), teacher.id]
-    );
-  }
-
-  await run(`
-    INSERT INTO user_logs (target_user_id, user_id, action, target_name, reason)
-    VALUES (?, ?, 'edit', ?, ?)
-  `, [teacher.id, req.user.id, fullName.trim(), reason.trim()]);
-
-  res.json({
-    id: teacher.id,
-    username: username.trim(),
-    fullName: fullName.trim(),
-    message: 'Enseignant modifié avec succès'
-  });
 }));
 
 app.delete('/api/teachers/:id', authMiddleware, requireRole('surveillance'), asyncHandler(async (req, res) => {

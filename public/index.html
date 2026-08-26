@@ -47,6 +47,17 @@
           <button type="submit" class="btn btn-primary btn-full" data-i18n="login">Se connecter</button>
         </form>
 
+        <button type="button" id="forgot-link" class="forgot-link" data-i18n="forgotPassword">Mot de passe oublié ?</button>
+
+        <form id="forgot-form" class="hidden">
+          <div class="form-group">
+            <label for="forgot-identifier" data-i18n="forgotIdentifier">Nom d’utilisateur ou e-mail</label>
+            <input type="text" id="forgot-identifier" autocomplete="username" required>
+          </div>
+          <button type="submit" class="btn btn-primary btn-full" data-i18n="sendPassword">Envoyer un nouveau mot de passe</button>
+          <button type="button" id="forgot-back" class="btn btn-ghost btn-full" data-i18n="backToLogin">Retour à la connexion</button>
+        </form>
+
         <button type="button" id="install-app-btn" class="btn btn-secondary btn-full install-app-btn" data-i18n="addToHome">
           📲 Ajouter à l’écran d’accueil
         </button>
@@ -340,16 +351,34 @@
               <option value="surveillance" data-i18n="roleAdminOption">Surveillance générale — administration complète</option>
             </select>
           </div>
+          <div class="form-group" id="user-subject-group">
+            <label for="user-subject" data-i18n="teacherSubject">Matière enseignée</label>
+            <input type="text" id="user-subject" list="subject-suggestions" data-i18n-placeholder="subjectPlaceholder" placeholder="Ex: Mathématiques, Arabe, Français…">
+            <datalist id="subject-suggestions">
+              <option value="Mathématiques"></option>
+              <option value="Arabe"></option>
+              <option value="Français"></option>
+              <option value="Anglais"></option>
+              <option value="Physique-Chimie"></option>
+              <option value="SVT"></option>
+              <option value="Histoire-Géographie"></option>
+              <option value="Éducation islamique"></option>
+              <option value="Informatique"></option>
+              <option value="EPS"></option>
+              <option value="Philosophie"></option>
+              <option value="Économie"></option>
+            </datalist>
+          </div>
+          <div class="form-group">
+            <label for="user-email" data-i18n="email">E-mail</label>
+            <input type="email" id="user-email" required autocomplete="email" data-i18n-placeholder="emailPlaceholder" placeholder="Ex: prof.martin@ecole.ma">
+          </div>
           <div class="form-group">
             <label for="user-password"><span data-i18n="password">Mot de passe</span> <span id="user-password-hint" class="hint hidden" data-i18n="passwordHint">(laisser vide pour ne pas changer)</span></label>
             <div class="password-wrapper">
               <input type="password" id="user-password" minlength="8" placeholder="••••••••" autocomplete="new-password">
               <button type="button" class="toggle-password" data-target="user-password" data-i18n-aria="showPassword" aria-label="Afficher le mot de passe">👁</button>
             </div>
-          </div>
-          <div class="form-group">
-            <label for="user-reason" data-i18n="reason">Motif</label>
-            <textarea id="user-reason" rows="2" required data-i18n-placeholder="userReasonPlaceholder" placeholder="Ex: Nouveau compte enseignant"></textarea>
           </div>
           <button type="submit" class="btn btn-primary btn-full" data-i18n="save">Enregistrer</button>
         </form>

@@ -37,11 +37,34 @@ function showToast(msg, type = 'success') {
 
 function showError(msg) {
   const el = $('#login-error');
+  el.className = 'error-msg';
+  el.textContent = msg;
+  show(el);
+}
+
+function showLoginInfo(msg) {
+  const el = $('#login-error');
+  el.className = 'success-msg';
   el.textContent = msg;
   show(el);
 }
 
 function hideError() { hide($('#login-error')); }
+
+function showLoginForm() {
+  show($('#login-form'));
+  show($('#forgot-link'));
+  hide($('#forgot-form'));
+}
+
+function showForgotForm() {
+  hide($('#login-form'));
+  hide($('#forgot-link'));
+  show($('#forgot-form'));
+  hideError();
+  $('#forgot-identifier').value = $('#username').value;
+  $('#forgot-identifier').focus();
+}
 
 async function api(path, options = {}) {
   const headers = { ...options.headers };
@@ -328,9 +351,32 @@ $('#logout-btn').addEventListener('click', () => {
   closeMobileMenu();
   hide($('#dashboard-view'));
   show($('#login-view'));
-  show($('#login-form'));
+  showLoginForm();
   $('#username').value = '';
   $('#password').value = '';
+  hideError();
+});
+
+$('#forgot-link').addEventListener('click', showForgotForm);
+
+$('#forgot-back').addEventListener('click', () => {
+  hideError();
+  showLoginForm();
+});
+
+$('#forgot-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  hideError();
+  try {
+    await api('/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ identifier: $('#forgot-identifier').value.trim() })
+    });
+    showLoginInfo(t('forgotSent'));
+    showLoginForm();
+  } catch (err) {
+    showError(err.message);
+  }
 });
 
 async function enterDashboard() {
@@ -1317,11 +1363,11 @@ async function loadAdminUsers() {
     <div class="account-item">
       <div class="account-info">
         <div class="account-name-row">
-          <strong>${u.full_name}</strong>
+          <strong>${escapeHtml(u.full_name)}</strong>
           ${roleBadge(u.role)}
           ${u.is_self ? `<span class="self-badge">${t('you')}</span>` : ''}
         </div>
-        <span class="account-meta">@${u.username} · ${t('createdOn')} ${formatDate(u.created_at)}</span>
+        <span class="account-meta">@${escapeHtml(u.username)}${u.email ? ` · ${escapeHtml(u.email)}` : ''}${u.role === 'teacher' && u.subject ? ` · ${escapeHtml(u.subject)}` : ''} · ${t('createdOn')} ${formatDate(u.created_at)}</span>
       </div>
       <div class="account-actions">
         <button class="btn btn-ghost btn-sm edit-user-btn" data-id="${u.id}">${t('edit')}</button>
@@ -1345,6 +1391,13 @@ async function loadAdminUsers() {
   });
 }
 
+function syncUserSubjectField() {
+  const isTeacher = $('#user-role').value === 'teacher';
+  $('#user-subject-group').classList.toggle('hidden', !isTeacher);
+  $('#user-subject').required = isTeacher;
+  if (!isTeacher) $('#user-subject').value = '';
+}
+
 $('#add-user-btn').addEventListener('click', () => openUserForm(null));
 
 function openUserForm(user) {
@@ -1359,19 +1412,38 @@ function openUserForm(user) {
     $('#user-full-name').value = user.full_name;
     $('#user-username').value = user.username;
     $('#user-role').value = user.role;
+    $('#user-email').value = user.email || '';
+    $('#user-subject').value = user.subject || '';
   }
 
+  syncUserSubjectField();
   show($('#user-form-modal'));
 }
+
+$('#user-role').addEventListener('change', syncUserSubjectField);
 
 $('#user-form').addEventListener('submit', async (e) => {
   e.preventDefault();
 
+  const role = $('#user-role').value;
+  const email = $('#user-email').value.trim();
+  const subject = $('#user-subject').value.trim();
+
+  if (!email) {
+    showToast(t('emailRequired'), 'error');
+    return;
+  }
+  if (role === 'teacher' && !subject) {
+    showToast(t('subjectRequired'), 'error');
+    return;
+  }
+
   const payload = {
     fullName: $('#user-full-name').value,
     username: $('#user-username').value,
-    role: $('#user-role').value,
-    reason: $('#user-reason').value
+    role,
+    email,
+    subject: role === 'teacher' ? subject : ''
   };
   const password = $('#user-password').value;
   if (password) payload.password = password;
