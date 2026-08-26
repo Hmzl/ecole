@@ -118,7 +118,7 @@ function studentScoreCircle(points, display20) {
   const scale20 = display20 || formatScale20(value);
   return `
     <div class="score-circle-wrap">
-      <svg class="score-circle" viewBox="0 0 ${size} ${size}" role="img" aria-label="Score ${value} sur 100">
+      <svg class="score-circle" viewBox="0 0 ${size} ${size}" role="img" aria-label="${t('scoreOn100', { n: value })}">
         <circle cx="${size / 2}" cy="${size / 2}" r="${radius}" fill="none" stroke="#1e293b" stroke-width="${stroke}"/>
         <circle class="score-circle-fill" cx="${size / 2}" cy="${size / 2}" r="${radius}" fill="none"
           stroke="${color}" stroke-width="${stroke}" stroke-linecap="round"
@@ -171,10 +171,10 @@ function lineChartSvg(series, title) {
 }
 
 function classBarsHtml(students) {
-  if (!students.length) return '<p class="report-empty">Aucun élève à afficher.</p>';
+  if (!students.length) return `<p class="report-empty">${t('noStudentsDisplay')}</p>`;
   return `
     <div class="class-bars">
-      <div class="class-bars-title">Diagramme des points /100</div>
+      <div class="class-bars-title">${t('diagramTitle')}</div>
       ${students.map((s) => {
         const value = Number(s.closing.points) || 0;
         const pct = Math.max(0, Math.min(100, value));
@@ -231,17 +231,17 @@ function studentChartHtml(report) {
       if (byDay.has(day)) running = byDay.get(day);
       series.push({ label: day.slice(8), value: running });
     }
-    return `${circle}<div class="report-chart-wrap">${lineChartSvg(series, 'Évolution quotidienne /100')}</div>`;
+    return `${circle}<div class="report-chart-wrap">${lineChartSvg(series, t('dailyEvolution'))}</div>`;
   }
   if (report.logs?.length) {
     const series = [
-      { label: 'Début', value: report.opening.points },
+      { label: t('start'), value: report.opening.points },
       ...report.logs.map((l, i) => ({
         label: String(i + 1),
         value: l.after.points
       }))
     ];
-    return `${circle}<div class="report-chart-wrap">${lineChartSvg(series, 'Évolution des points /100')}</div>`;
+    return `${circle}<div class="report-chart-wrap">${lineChartSvg(series, t('pointsEvolution'))}</div>`;
   }
   return circle;
 }
@@ -258,20 +258,20 @@ function renderPhoto(student) {
 }
 
 function formatDate(iso) {
-  return new Date(iso + 'Z').toLocaleString('fr-FR', {
+  return new Date(iso + 'Z').toLocaleString(dateLocale(), {
     day: '2-digit', month: 'short', year: 'numeric',
     hour: '2-digit', minute: '2-digit'
   });
 }
 
 function studentActionLabel(action) {
-  if (action === 'add') return '+ Ajout';
-  if (action === 'edit') return '✎ Modification';
-  return '− Suppression';
+  if (action === 'add') return t('actionAdd');
+  if (action === 'edit') return t('actionEdit');
+  return t('actionDelete');
 }
 
 function roleLabel(role) {
-  return role === 'surveillance' ? 'Surveillance générale' : 'Enseignant';
+  return role === 'surveillance' ? t('surveillanceRole') : t('teacher');
 }
 
 function roleBadge(role) {
@@ -279,9 +279,9 @@ function roleBadge(role) {
 }
 
 function userActionLabel(action) {
-  if (action === 'add') return '+ Ajout';
-  if (action === 'edit') return '✎ Modification';
-  return '− Suppression';
+  if (action === 'add') return t('actionAdd');
+  if (action === 'edit') return t('actionEdit');
+  return t('actionDelete');
 }
 
 // ─── Password visibility ────────────────────────────────────────────────────
@@ -294,7 +294,7 @@ document.addEventListener('click', (e) => {
   const visible = input.type === 'text';
   input.type = visible ? 'password' : 'text';
   btn.textContent = visible ? '👁' : '🙈';
-  btn.setAttribute('aria-label', visible ? 'Afficher le mot de passe' : 'Masquer le mot de passe');
+  btn.setAttribute('aria-label', visible ? t('showPassword') : t('hidePassword'));
 });
 
 // ─── Auth ───────────────────────────────────────────────────────────────────
@@ -337,8 +337,8 @@ async function enterDashboard() {
   hide($('#login-view'));
   show($('#dashboard-view'));
 
-  const roleLabel = currentUser.role === 'surveillance' ? 'Administrateur' : 'Enseignant';
-  $('#user-info').textContent = `${currentUser.fullName} · ${roleLabel}`;
+  const roleLabelText = currentUser.role === 'surveillance' ? t('admin') : t('teacher');
+  $('#user-info').textContent = `${currentUser.fullName} · ${roleLabelText}`;
 
   if (currentUser.role === 'surveillance') {
     show($('#surveillance-panel'));
@@ -368,6 +368,7 @@ async function loadClasses() {
   const classOptions = classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
   $('#new-class').innerHTML = classOptions;
   $('#edit-class').innerHTML = classOptions;
+  if (!classes.length) $('#current-class-name').textContent = t('selectClass');
   await loadAllStudents();
 }
 
@@ -393,7 +394,7 @@ async function selectClass(id, name, el) {
     const input = $(sel);
     if (input) input.value = '';
   });
-  $('#student-count').textContent = `${students.length} élèves`;
+  $('#student-count').textContent = t('studentsCount', { n: students.length });
   const reportBtn = $('#class-report-btn');
   if (students.length) show(reportBtn);
   else hide(reportBtn);
@@ -408,8 +409,8 @@ function renderStudents(students, options = {}) {
   if (!students.length) {
     const query = getSearchQuery();
     grid.innerHTML = query
-      ? '<p class="empty-msg">Aucun élève ne correspond à la recherche.</p>'
-      : '<p class="empty-msg">Aucun élève dans cette classe.</p>';
+      ? `<p class="empty-msg">${t('noSearchResults')}</p>`
+      : `<p class="empty-msg">${t('noStudentsInClass')}</p>`;
     return;
   }
 
@@ -419,8 +420,8 @@ function renderStudents(students, options = {}) {
     card.innerHTML = `
       ${currentUser.role === 'surveillance' ? `
         <div class="card-actions">
-          <button class="edit-btn" data-id="${student.id}" title="Modifier">✎</button>
-          <button class="delete-btn" data-id="${student.id}" title="Supprimer">✕</button>
+          <button class="edit-btn" data-id="${student.id}" title="${t('edit')}">✎</button>
+          <button class="delete-btn" data-id="${student.id}" title="${t('delete')}">✕</button>
         </div>
       ` : ''}
       <div class="student-photo">${renderPhoto(student)}</div>
@@ -488,7 +489,7 @@ function updateModalPoints() {
   const display = currentPoints(selectedStudent) + pendingChange;
   $('#modal-current-points').textContent = display;
   $('#modal-current-points').className = `points-big ${pointsClass(display)}`;
-  $('#modal-points-label').textContent = `points (max. 100) · ${formatScale20(display)}`;
+  $('#modal-points-label').textContent = t('pointsMax', { scale: formatScale20(display) });
 }
 
 $$('.btn-points').forEach(btn => {
@@ -507,11 +508,11 @@ $$('.btn-points').forEach(btn => {
 $('#apply-points-btn').addEventListener('click', async () => {
   const reason = $('#points-reason').value.trim();
   if (pendingChange === 0) {
-    showToast('Sélectionnez une modification de points', 'error');
+    showToast(t('selectPointsChange'), 'error');
     return;
   }
   if (!reason) {
-    showToast('Veuillez indiquer la raison du changement', 'error');
+    showToast(t('reasonRequired'), 'error');
     return;
   }
 
@@ -522,7 +523,7 @@ $('#apply-points-btn').addEventListener('click', async () => {
     });
 
     selectedStudent.points = result.points;
-    showToast(`Points mis à jour : ${result.points}/100 (${formatScale20(result.points)})`);
+    showToast(t('pointsUpdated', { n: result.points, scale: formatScale20(result.points) }));
     hide($('#points-modal'));
     await selectClass(currentClassId, $('#current-class-name').textContent,
       $(`.class-list li[data-id="${currentClassId}"]`));
@@ -537,7 +538,7 @@ async function loadHistory(studentId) {
   const canDelete = currentUser?.role === 'surveillance';
 
   list.innerHTML = history.length === 0
-    ? '<li>Aucun historique</li>'
+    ? `<li>${t('noHistory')}</li>`
     : history.map(h => `
       <li class="history-item">
         <div class="history-item-body">
@@ -548,7 +549,7 @@ async function loadHistory(studentId) {
           <span class="history-scale20">(${formatScale20(h.points_after)})</span>
           <div class="history-meta">${h.reason} · ${h.user_name} · ${formatDate(h.created_at)}</div>
         </div>
-        ${canDelete ? `<button class="history-delete-btn" data-id="${h.id}" title="Supprimer">✕</button>` : ''}
+        ${canDelete ? `<button class="history-delete-btn" data-id="${h.id}" title="${t('delete')}">✕</button>` : ''}
       </li>
     `).join('');
 
@@ -565,7 +566,7 @@ function openDeleteHistoryModal(entry, studentId) {
   historyToDelete = { ...entry, studentId };
   const sign = entry.points_change > 0 ? '+' : '';
   $('#delete-history-info').textContent =
-    `Supprimer l'entrée « ${sign}${entry.points_change} pts → ${entry.points_after} pts » (${entry.reason}) ?`;
+    t('deleteHistoryConfirm', { detail: `${sign}${entry.points_change} pts → ${entry.points_after} pts`, reason: entry.reason });
   $('#delete-history-reason').value = '';
   show($('#delete-history-modal'));
 }
@@ -573,7 +574,7 @@ function openDeleteHistoryModal(entry, studentId) {
 $('#confirm-delete-history-btn').addEventListener('click', async () => {
   const reason = $('#delete-history-reason').value.trim();
   if (!reason) {
-    showToast('Motif requis', 'error');
+    showToast(t('reasonRequiredShort'), 'error');
     return;
   }
 
@@ -583,7 +584,7 @@ $('#confirm-delete-history-btn').addEventListener('click', async () => {
       body: JSON.stringify({ reason })
     });
 
-    showToast('Entrée supprimée');
+    showToast(t('entryDeleted'));
     hide($('#delete-history-modal'));
 
     if (selectedStudent?.id === historyToDelete.studentId) {
@@ -615,19 +616,19 @@ function reportStatsHtml(report) {
     <div class="report-stats">
       <div class="report-stat">
         <span class="report-stat-value">${report.opening.points}/100</span>
-        <span class="report-stat-label">Début · ${report.opening.display20}</span>
+        <span class="report-stat-label">${t('start')} · ${report.opening.display20}</span>
       </div>
       <div class="report-stat">
         <span class="report-stat-value ${netClass}">${formatSigned(report.net.points)}</span>
-        <span class="report-stat-label">Variation · ${formatSigned(report.net20)}/20</span>
+        <span class="report-stat-label">${t('variation')} · ${formatSigned(report.net20)}/20</span>
       </div>
       <div class="report-stat">
         <span class="report-stat-value">${report.closing.points}/100</span>
-        <span class="report-stat-label">Fin · ${report.closing.display20}</span>
+        <span class="report-stat-label">${t('end')} · ${report.closing.display20}</span>
       </div>
       <div class="report-stat">
         <span class="report-stat-value">${report.entries}</span>
-        <span class="report-stat-label">Modifications</span>
+        <span class="report-stat-label">${t('changes')}</span>
       </div>
     </div>
   `;
@@ -636,7 +637,7 @@ function reportStatsHtml(report) {
 async function loadStudentReport() {
   if (!selectedStudent) return;
   const box = $('#student-report');
-  box.innerHTML = '<p class="report-empty">Chargement…</p>';
+  box.innerHTML = `<p class="report-empty">${t('loading')}</p>`;
   try {
     const query = studentReportPeriod === 'monthly'
       ? `period=monthly&month=${encodeURIComponent($('#student-report-month').value || currentMonthISO())}`
@@ -644,7 +645,7 @@ async function loadStudentReport() {
     const report = await api(`/students/${selectedStudent.id}/report?${query}`);
     const logsHtml = report.logs.length
       ? `<table class="report-table">
-          <thead><tr><th>Heure</th><th>Motif</th><th class="num">Δ pts</th><th class="num">/100</th><th class="num">/20</th></tr></thead>
+          <thead><tr><th>${t('time')}</th><th>${t('reason')}</th><th class="num">Δ pts</th><th class="num">/100</th><th class="num">/20</th></tr></thead>
           <tbody>${report.logs.map((l) => `
             <tr>
               <td>${formatDate(l.created_at)}</td>
@@ -654,11 +655,11 @@ async function loadStudentReport() {
               <td class="num">${l.after.display20}</td>
             </tr>`).join('')}
           </tbody></table>`
-      : '<p class="report-empty">Aucune modification sur cette période.</p>';
+      : `<p class="report-empty">${t('noChangesPeriod')}</p>`;
 
     const daysHtml = report.days?.length
       ? `<table class="report-table">
-          <thead><tr><th>Jour</th><th class="num">Début /100</th><th class="num">Δ</th><th class="num">Fin /100</th><th class="num">/20</th></tr></thead>
+          <thead><tr><th>${t('day')}</th><th class="num">${t('start100')}</th><th class="num">${t('delta')}</th><th class="num">${t('end100')}</th><th class="num">${t('per20')}</th></tr></thead>
           <tbody>${report.days.map((d) => `
             <tr>
               <td>${d.date}</td>
@@ -703,17 +704,17 @@ $('#student-report-month').addEventListener('change', loadStudentReport);
 async function loadClassReport() {
   if (!currentClassId) return;
   const box = $('#class-report');
-  box.innerHTML = '<p class="report-empty">Chargement…</p>';
+  box.innerHTML = `<p class="report-empty">${t('loading')}</p>`;
   try {
     const query = classReportPeriod === 'monthly'
       ? `period=monthly&month=${encodeURIComponent($('#class-report-month').value || currentMonthISO())}`
       : `period=daily&date=${encodeURIComponent($('#class-report-date').value || todayISO())}`;
     const report = await api(`/classes/${currentClassId}/report?${query}`);
-    $('#class-report-subtitle').textContent = `${report.class.name} · ${report.range.label} · moyenne ${report.average.points}/100 (${report.average.display20})`;
+    $('#class-report-subtitle').textContent = `${report.class.name} · ${report.range.label} · ${t('average')} ${report.average.points}/100 (${report.average.display20})`;
 
     if (!report.students.length) {
       lastClassReport = null;
-      box.innerHTML = '<p class="report-empty">Aucun élève dans cette classe.</p>';
+      box.innerHTML = `<p class="report-empty">${t('noStudentsInClass')}</p>`;
       return;
     }
 
@@ -733,7 +734,7 @@ function renderClassReport(students) {
   if (!report) return;
 
   if (!students.length) {
-    box.innerHTML = '<p class="report-empty">Aucun élève ne correspond à la recherche.</p>';
+    box.innerHTML = `<p class="report-empty">${t('noSearchResults')}</p>`;
     return;
   }
 
@@ -742,13 +743,13 @@ function renderClassReport(students) {
     <table class="report-table">
       <thead>
         <tr>
-          <th>Nom</th>
-          <th>Prénom</th>
-          <th class="num">Début /100</th>
-          <th class="num">Δ</th>
-          <th class="num">Fin /100</th>
-          <th class="num">/20</th>
-          <th class="num">Actions</th>
+          <th>${t('lastName')}</th>
+          <th>${t('firstNameCol')}</th>
+          <th class="num">${t('start100')}</th>
+          <th class="num">${t('delta')}</th>
+          <th class="num">${t('end100')}</th>
+          <th class="num">${t('per20')}</th>
+          <th class="num">${t('actions')}</th>
         </tr>
       </thead>
       <tbody>
@@ -765,7 +766,7 @@ function renderClassReport(students) {
         `).join('')}
       </tbody>
     </table>
-    <p class="report-note">Le score principal est sur 100. Conversion : 5 points = 1/20. Moyenne : ${report.average.points}/100 (${report.average.display20}).</p>
+    <p class="report-note">${t('scoreNote', { avg: report.average.points, avg20: report.average.display20 })}</p>
   `;
 }
 
@@ -800,8 +801,8 @@ function applyStudentSearch(sourceId) {
 
   if (query && allStudents.length) {
     const filtered = allStudents.filter((s) => matchesName(s.first_name, s.last_name, query));
-    $('#current-class-name').textContent = 'Recherche';
-    $('#student-count').textContent = `${filtered.length} / ${allStudents.length} élèves`;
+    $('#current-class-name').textContent = t('search');
+    $('#student-count').textContent = t('studentsFound', { n: filtered.length, total: allStudents.length });
     hide($('#class-report-btn'));
     renderStudents(filtered, { showClass: true });
     return;
@@ -811,8 +812,8 @@ function applyStudentSearch(sourceId) {
   const filtered = classStudents.filter((s) => matchesName(s.first_name, s.last_name, query));
   const total = classStudents.length;
   $('#student-count').textContent = query
-    ? `${filtered.length} / ${total} élèves`
-    : `${total} élèves`;
+    ? t('studentsFound', { n: filtered.length, total })
+    : t('studentsCount', { n: total });
   const reportBtn = $('#class-report-btn');
   if (!query && total) show(reportBtn);
   else if (reportBtn) hide(reportBtn);
@@ -860,39 +861,313 @@ function classReportQuery() {
     : `period=daily&date=${encodeURIComponent($('#class-report-date').value || todayISO())}`;
 }
 
+function visibleClassReportStudents() {
+  if (!lastClassReport) return [];
+  const query = $('#report-search')?.value || '';
+  return lastClassReport.students.filter((s) => matchesName(s.first_name, s.last_name, query));
+}
+
+function wrapCanvasText(ctx, text, maxWidth) {
+  const raw = String(text || '').trim() || '—';
+  if (ctx.measureText(raw).width <= maxWidth) return [raw];
+  const words = raw.split(/\s+/);
+  const lines = [];
+  let line = '';
+  const pushChars = (word) => {
+    let chunk = '';
+    for (const ch of word) {
+      const test = chunk + ch;
+      if (ctx.measureText(test).width > maxWidth && chunk) {
+        lines.push(chunk);
+        chunk = ch;
+      } else chunk = test;
+    }
+    return chunk;
+  };
+  for (const word of words) {
+    const test = line ? `${line} ${word}` : word;
+    if (ctx.measureText(test).width <= maxWidth) {
+      line = test;
+      continue;
+    }
+    if (line) lines.push(line);
+    if (ctx.measureText(word).width <= maxWidth) line = word;
+    else line = pushChars(word);
+  }
+  if (line) lines.push(line);
+  return lines.length ? lines : [raw];
+}
+
+function drawClassDiagramCanvas(students, report) {
+  ensureCanvasRoundRect();
+  const cssWidth = 920;
+  const pad = 36;
+  const nameW = 240;
+  const scoreW = 72;
+  const gap = 16;
+  const barX = pad + nameW + gap;
+  const barW = cssWidth - barX - scoreW - pad;
+  const font = isArabic()
+    ? '"Tajawal", "Segoe UI", Arial, sans-serif'
+    : '"DM Sans", "Segoe UI", Arial, sans-serif';
+  const measure = document.createElement('canvas').getContext('2d');
+  const rows = students.map((s) => {
+    measure.font = `700 14px ${font}`;
+    const lastLines = wrapCanvasText(measure, s.last_name, nameW);
+    measure.font = `500 13px ${font}`;
+    const firstLines = wrapCanvasText(measure, s.first_name, nameW);
+    return {
+      student: s,
+      lastLines,
+      firstLines,
+      height: Math.max(52, 18 + (lastLines.length + firstLines.length) * 17)
+    };
+  });
+  const headerH = 118;
+  const cssHeight = headerH + rows.reduce((sum, row) => sum + row.height, 0) + 28;
+  const scale = 2;
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(cssWidth * scale);
+  canvas.height = Math.round(cssHeight * scale);
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(scale, 0, 0, scale, 0, 0);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, cssWidth, cssHeight);
+
+  ctx.fillStyle = '#111827';
+  ctx.font = `700 22px ${font}`;
+  ctx.fillText(t('diagramTitle'), pad, 38);
+  ctx.fillStyle = '#4b5563';
+  ctx.font = `500 14px ${font}`;
+  ctx.fillText(`${report.class.name} · ${report.range.label}`, pad, 64);
+  ctx.fillText(t('pdfAverage', { avg: report.average.points, avg20: report.average.display20 }), pad, 86);
+  ctx.strokeStyle = '#e5e7eb';
+  ctx.beginPath();
+  ctx.moveTo(pad, 100);
+  ctx.lineTo(cssWidth - pad, 100);
+  ctx.stroke();
+
+  let y = headerH;
+  rows.forEach((row) => {
+    const s = row.student;
+    const value = Number(s.closing.points) || 0;
+    const pct = Math.max(0, Math.min(100, value)) / 100;
+    let ty = y + 18;
+    ctx.fillStyle = '#111827';
+    ctx.font = `700 14px ${font}`;
+    row.lastLines.forEach((line) => {
+      ctx.fillText(line, pad, ty);
+      ty += 17;
+    });
+    ctx.fillStyle = '#6b7280';
+    ctx.font = `500 13px ${font}`;
+    row.firstLines.forEach((line) => {
+      ctx.fillText(line, pad, ty);
+      ty += 17;
+    });
+
+    const barY = y + Math.max(14, (row.height - 16) / 2);
+    ctx.fillStyle = '#eef2f7';
+    ctx.beginPath();
+    ctx.roundRect(barX, barY, barW, 16, 8);
+    ctx.fill();
+    if (pct > 0) {
+      ctx.fillStyle = barColor(value);
+      ctx.beginPath();
+      ctx.roundRect(barX, barY, Math.max(6, barW * pct), 16, 8);
+      ctx.fill();
+    }
+
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#111827';
+    ctx.font = `700 15px ${font}`;
+    ctx.fillText(String(value), cssWidth - pad, y + row.height / 2 - 2);
+    ctx.fillStyle = '#6b7280';
+    ctx.font = `500 11px ${font}`;
+    ctx.fillText(s.closing.display20 || formatScale20(value), cssWidth - pad, y + row.height / 2 + 14);
+    ctx.textAlign = 'left';
+    y += row.height;
+  });
+
+  return canvas;
+}
+
+function canvasToJpegBytes(canvas, quality = 0.92) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        reject(new Error('Création de l’image PDF impossible'));
+        return;
+      }
+      blob.arrayBuffer().then((buf) => resolve(new Uint8Array(buf))).catch(reject);
+    }, 'image/jpeg', quality);
+  });
+}
+
+function buildJpegPdf(pages) {
+  const enc = new TextEncoder();
+  const pageW = 595.28;
+  const pageH = 841.89;
+  const margin = 28;
+  const parts = [];
+  const offsets = [0];
+  const add = (data) => {
+    parts.push(typeof data === 'string' ? enc.encode(data) : data);
+  };
+  const sizeSoFar = () => parts.reduce((n, p) => n + p.length, 0);
+  const addObj = (text) => {
+    offsets.push(sizeSoFar());
+    add(text);
+  };
+
+  add('%PDF-1.4\n');
+  const n = pages.length;
+  const pageObjIds = pages.map((_, i) => 3 + i * 3);
+  const contentObjIds = pages.map((_, i) => 4 + i * 3);
+  const imageObjIds = pages.map((_, i) => 5 + i * 3);
+
+  addObj('1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n');
+  addObj(`2 0 obj\n<< /Type /Pages /Count ${n} /Kids [${pageObjIds.map((id) => `${id} 0 R`).join(' ')}] >>\nendobj\n`);
+
+  pages.forEach((page, i) => {
+    const maxW = pageW - margin * 2;
+    const maxH = pageH - margin * 2;
+    const fit = Math.min(maxW / page.width, maxH / page.height);
+    const drawW = page.width * fit;
+    const drawH = page.height * fit;
+    const x = margin;
+    const y = pageH - margin - drawH;
+    const stream = `q\n${drawW.toFixed(2)} 0 0 ${drawH.toFixed(2)} ${x.toFixed(2)} ${y.toFixed(2)} cm\n/Im${i} Do\nQ\n`;
+    addObj(`${pageObjIds[i]} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageW} ${pageH}] /Resources << /XObject << /Im${i} ${imageObjIds[i]} 0 R >> >> /Contents ${contentObjIds[i]} 0 R >>\nendobj\n`);
+    addObj(`${contentObjIds[i]} 0 obj\n<< /Length ${enc.encode(stream).length} >>\nstream\n${stream}endstream\nendobj\n`);
+    offsets.push(sizeSoFar());
+    add(`${imageObjIds[i]} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${page.width} /Height ${page.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${page.data.length} >>\nstream\n`);
+    add(page.data);
+    add('\nendstream\nendobj\n');
+  });
+
+  const xrefOffset = sizeSoFar();
+  let xref = `xref\n0 ${offsets.length}\n0000000000 65535 f \n`;
+  for (let i = 1; i < offsets.length; i++) {
+    xref += `${String(offsets[i]).padStart(10, '0')} 00000 n \n`;
+  }
+  add(xref);
+  add(`trailer\n<< /Size ${offsets.length} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`);
+
+  const out = new Uint8Array(sizeSoFar());
+  let pos = 0;
+  for (const part of parts) {
+    out.set(part, pos);
+    pos += part.length;
+  }
+  return new Blob([out], { type: 'application/pdf' });
+}
+
+function classDiagramFilename(report) {
+  const cls = String(report?.class?.name || 'classe')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\w.-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '') || 'classe';
+  const when = String(report?.range?.label || todayISO()).replace(/[^\dA-Za-z]+/g, '-');
+  return `diagramme-points-${cls}-${when}.pdf`;
+}
+
+function ensureCanvasRoundRect() {
+  const proto = CanvasRenderingContext2D.prototype;
+  if (typeof proto.roundRect === 'function') return;
+  proto.roundRect = function (x, y, w, h, r) {
+    const rad = Math.min(Number(r) || 0, w / 2, h / 2);
+    this.moveTo(x + rad, y);
+    this.arcTo(x + w, y, x + w, y + h, rad);
+    this.arcTo(x + w, y + h, x, y + h, rad);
+    this.arcTo(x, y + h, x, y, rad);
+    this.arcTo(x, y, x + w, y, rad);
+    this.closePath();
+    return this;
+  };
+}
+
+async function createClassDiagramPdf(students, report) {
+  ensureCanvasRoundRect();
+  const canvas = drawClassDiagramCanvas(students, report);
+  const pagePxH = Math.round(canvas.width * (297 / 210));
+  const slices = [];
+  for (let y = 0; y < canvas.height; y += pagePxH) {
+    const h = Math.min(pagePxH, canvas.height - y);
+    const slice = document.createElement('canvas');
+    slice.width = canvas.width;
+    slice.height = h;
+    const ctx = slice.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, slice.width, slice.height);
+    ctx.drawImage(canvas, 0, y, canvas.width, h, 0, 0, canvas.width, h);
+    slices.push({
+      width: slice.width,
+      height: slice.height,
+      data: await canvasToJpegBytes(slice)
+    });
+  }
+  return buildJpegPdf(slices);
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+function printPdfBlob(blob) {
+  const url = URL.createObjectURL(blob);
+  const iframe = document.createElement('iframe');
+  iframe.setAttribute('aria-hidden', 'true');
+  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
+  iframe.src = url;
+  document.body.appendChild(iframe);
+  iframe.onload = () => {
+    iframe.contentWindow.focus();
+    iframe.contentWindow.print();
+    setTimeout(() => {
+      iframe.remove();
+      URL.revokeObjectURL(url);
+    }, 60000);
+  };
+}
+
+async function exportClassDiagramPdf(mode) {
+  const report = lastClassReport;
+  const students = visibleClassReportStudents();
+  if (!report || !students.length) {
+    showToast(t('noDiagram'), 'error');
+    return;
+  }
+  try {
+    const blob = await createClassDiagramPdf(students, report);
+    if (mode === 'print') {
+      printPdfBlob(blob);
+      showToast(t('printingPdf'));
+      return;
+    }
+    downloadBlob(blob, classDiagramFilename(report));
+    showToast(t('pdfDownloaded'));
+  } catch (err) {
+    showToast(err.message || t('pdfFailed'), 'error');
+  }
+}
+
 $('#class-report-date').addEventListener('change', loadClassReport);
 $('#class-report-month').addEventListener('change', loadClassReport);
 $('#student-search')?.addEventListener('input', () => applyStudentSearch('student-search'));
 $('#home-search')?.addEventListener('input', () => applyStudentSearch('home-search'));
 $('#report-search')?.addEventListener('input', applyReportSearch);
-$('#print-class-report-btn').addEventListener('click', () => window.print());
-
-$('#download-class-report-btn').addEventListener('click', async () => {
-  if (!currentClassId) return;
-  try {
-    const res = await fetch(`${API}/classes/${currentClassId}/report/export?${classReportQuery()}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error(data.error || 'Téléchargement impossible');
-    }
-    const blob = await res.blob();
-    const match = /filename="?([^"]+)"?/i.exec(res.headers.get('Content-Disposition') || '');
-    const filename = match?.[1] || 'rapport-classe.xlsx';
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
-    showToast('Rapport téléchargé');
-  } catch (err) {
-    showToast(err.message, 'error');
-  }
-});
+$('#download-class-report-btn').addEventListener('click', () => exportClassDiagramPdf('download'));
+$('#print-class-report-btn').addEventListener('click', () => exportClassDiagramPdf('print'));
 
 // ─── Add Student ────────────────────────────────────────────────────────────
 
@@ -914,7 +1189,7 @@ $('#add-student-form').addEventListener('submit', async (e) => {
 
   try {
     await api('/students', { method: 'POST', body: formData });
-    showToast('Élève ajouté avec 100 points');
+    showToast(t('studentAdded'));
     hide($('#add-student-modal'));
     await loadClasses();
   } catch (err) {
@@ -945,7 +1220,7 @@ $('#edit-student-form').addEventListener('submit', async (e) => {
 
   try {
     await api(`/students/${studentToEdit.id}`, { method: 'PUT', body: formData });
-    showToast('Élève modifié');
+    showToast(t('studentEdited'));
     hide($('#edit-student-modal'));
     await loadClasses();
   } catch (err) {
@@ -960,7 +1235,7 @@ let studentToDelete = null;
 function openDeleteModal(student) {
   studentToDelete = student;
   $('#delete-student-name').textContent =
-    `Voulez-vous supprimer ${student.first_name} ${student.last_name} ? Cette action sera enregistrée.`;
+    t('deleteStudentConfirm', { first: student.first_name, last: student.last_name });
   $('#delete-reason').value = '';
   show($('#delete-modal'));
 }
@@ -968,7 +1243,7 @@ function openDeleteModal(student) {
 $('#confirm-delete-btn').addEventListener('click', async () => {
   const reason = $('#delete-reason').value.trim();
   if (!reason) {
-    showToast('Motif de suppression requis', 'error');
+    showToast(t('deleteReasonRequired'), 'error');
     return;
   }
 
@@ -977,7 +1252,7 @@ $('#confirm-delete-btn').addEventListener('click', async () => {
       method: 'DELETE',
       body: JSON.stringify({ reason })
     });
-    showToast('Élève supprimé');
+    showToast(t('studentDeleted'));
     hide($('#delete-modal'));
     await loadClasses();
   } catch (err) {
@@ -1034,7 +1309,7 @@ async function loadAdminUsers() {
 
   const list = $('#admin-users-list');
   if (filtered.length === 0) {
-    list.innerHTML = '<p class="empty-msg">Aucun utilisateur trouvé</p>';
+    list.innerHTML = `<p class="empty-msg">${t('noUsers')}</p>`;
     return;
   }
 
@@ -1044,13 +1319,13 @@ async function loadAdminUsers() {
         <div class="account-name-row">
           <strong>${u.full_name}</strong>
           ${roleBadge(u.role)}
-          ${u.is_self ? '<span class="self-badge">Vous</span>' : ''}
+          ${u.is_self ? `<span class="self-badge">${t('you')}</span>` : ''}
         </div>
-        <span class="account-meta">@${u.username} · créé le ${formatDate(u.created_at)}</span>
+        <span class="account-meta">@${u.username} · ${t('createdOn')} ${formatDate(u.created_at)}</span>
       </div>
       <div class="account-actions">
-        <button class="btn btn-ghost btn-sm edit-user-btn" data-id="${u.id}">Modifier</button>
-        ${u.is_self ? '' : `<button class="btn btn-ghost btn-sm delete-user-btn" data-id="${u.id}">Supprimer</button>`}
+        <button class="btn btn-ghost btn-sm edit-user-btn" data-id="${u.id}">${t('edit')}</button>
+        ${u.is_self ? '' : `<button class="btn btn-ghost btn-sm delete-user-btn" data-id="${u.id}">${t('delete')}</button>`}
       </div>
     </div>
   `).join('');
@@ -1075,7 +1350,7 @@ $('#add-user-btn').addEventListener('click', () => openUserForm(null));
 function openUserForm(user) {
   userToEdit = user;
   $('#user-form').reset();
-  $('#user-form-title').textContent = user ? 'Modifier un utilisateur' : 'Ajouter un utilisateur';
+  $('#user-form-title').textContent = user ? t('editUserTitle') : t('addUserTitle');
   $('#user-password-hint').classList.toggle('hidden', !user);
   $('#user-password').required = !user;
   $('#user-role').disabled = !!(user?.is_self);
@@ -1107,17 +1382,17 @@ $('#user-form').addEventListener('submit', async (e) => {
         method: 'PUT',
         body: JSON.stringify(payload)
       });
-      showToast('Utilisateur modifié');
+      showToast(t('userEdited'));
     } else {
       if (!password) {
-        showToast('Le mot de passe est requis', 'error');
+        showToast(t('passwordRequired'), 'error');
         return;
       }
       await api('/admin/users', {
         method: 'POST',
         body: JSON.stringify(payload)
       });
-      showToast('Utilisateur ajouté');
+      showToast(t('userAdded'));
     }
 
     hide($('#user-form-modal'));
@@ -1130,7 +1405,7 @@ $('#user-form').addEventListener('submit', async (e) => {
 function openDeleteUserModal(user) {
   userToDelete = user;
   $('#delete-user-name').textContent =
-    `Supprimer ${user.full_name} (@${user.username}) — ${roleLabel(user.role)} ?`;
+    t('deleteUserConfirm', { name: user.full_name, username: user.username });
   $('#delete-user-reason').value = '';
   show($('#delete-user-modal'));
 }
@@ -1138,7 +1413,7 @@ function openDeleteUserModal(user) {
 $('#confirm-delete-user-btn').addEventListener('click', async () => {
   const reason = $('#delete-user-reason').value.trim();
   if (!reason) {
-    showToast('Motif de suppression requis', 'error');
+    showToast(t('deleteReasonRequired'), 'error');
     return;
   }
 
@@ -1147,7 +1422,7 @@ $('#confirm-delete-user-btn').addEventListener('click', async () => {
       method: 'DELETE',
       body: JSON.stringify({ reason })
     });
-    showToast('Utilisateur supprimé');
+    showToast(t('userDeleted'));
     hide($('#delete-user-modal'));
     await loadAdminUsers();
   } catch (err) {
@@ -1164,37 +1439,37 @@ async function loadAdminDatabase() {
   $('#admin-stats').innerHTML = `
     <div class="stat-card">
       <span class="stat-value">${stats.users.total}</span>
-      <span class="stat-label">Utilisateurs</span>
-      <span class="stat-detail">${stats.users.teachers} enseignants · ${stats.users.surveillance} surveillance</span>
+      <span class="stat-label">${t('statUsers')}</span>
+      <span class="stat-detail">${t('statUsersDetail', { teachers: stats.users.teachers, surv: stats.users.surveillance })}</span>
     </div>
     <div class="stat-card">
       <span class="stat-value">${stats.students.active}</span>
-      <span class="stat-label">Élèves actifs</span>
-      <span class="stat-detail">${stats.students.inactive} inactifs</span>
+      <span class="stat-label">${t('statStudents')}</span>
+      <span class="stat-detail">${t('statStudentsDetail', { n: stats.students.inactive })}</span>
     </div>
     <div class="stat-card">
       <span class="stat-value">${stats.classes}</span>
-      <span class="stat-label">Classes</span>
+      <span class="stat-label">${t('statClasses')}</span>
     </div>
     <div class="stat-card">
       <span class="stat-value">${stats.logs.points + stats.logs.students + stats.logs.users}</span>
-      <span class="stat-label">Entrées de journal</span>
-      <span class="stat-detail">${stats.logs.points} pts · ${stats.logs.students} élèves · ${stats.logs.users} comptes</span>
+      <span class="stat-label">${t('statLogs')}</span>
+      <span class="stat-detail">${t('statLogsDetail', { pts: stats.logs.points, students: stats.logs.students, accounts: stats.logs.users })}</span>
     </div>
   `;
 
   const list = $('#admin-classes-list');
   if (classes.length === 0) {
-    list.innerHTML = '<p class="empty-msg">Aucune classe</p>';
+    list.innerHTML = `<p class="empty-msg">${t('noClasses')}</p>`;
     return;
   }
 
   list.innerHTML = `
     <div class="classes-table-header">
-      <span>Classe</span>
-      <span>Élèves</span>
-      <span>Créée le</span>
-      <span>Actions</span>
+      <span>${t('classLabel')}</span>
+      <span>${t('logsStudents')}</span>
+      <span>${t('createdAt')}</span>
+      <span>${t('actions')}</span>
     </div>
     ${classes.map(c => `
       <div class="classes-table-row">
@@ -1202,8 +1477,8 @@ async function loadAdminDatabase() {
         <span>${c.student_count}</span>
         <span class="account-meta">${formatDate(c.created_at)}</span>
         <div class="account-actions">
-          <button class="btn btn-ghost btn-sm edit-class-btn" data-id="${c.id}" data-name="${c.name}">Modifier</button>
-          <button class="btn btn-ghost btn-sm delete-class-btn" data-id="${c.id}" data-name="${c.name}" data-count="${c.student_count}">Supprimer</button>
+          <button class="btn btn-ghost btn-sm edit-class-btn" data-id="${c.id}" data-name="${c.name}">${t('edit')}</button>
+          <button class="btn btn-ghost btn-sm delete-class-btn" data-id="${c.id}" data-name="${c.name}" data-count="${c.student_count}">${t('delete')}</button>
         </div>
       </div>
     `).join('')}
@@ -1213,7 +1488,7 @@ async function loadAdminDatabase() {
     btn.addEventListener('click', () => {
       classToEdit = { id: parseInt(btn.dataset.id, 10), name: btn.dataset.name };
       $('#class-form').reset();
-      $('#class-form-title').textContent = 'Modifier une classe';
+      $('#class-form-title').textContent = t('editClassTitle');
       $('#class-name').value = classToEdit.name;
       show($('#class-form-modal'));
     });
@@ -1227,7 +1502,7 @@ async function loadAdminDatabase() {
         student_count: parseInt(btn.dataset.count, 10)
       };
       $('#delete-class-name').textContent =
-        `Supprimer la classe « ${classToDelete.name} » (${classToDelete.student_count} élève(s)) ?`;
+        t('deleteClassConfirm', { name: classToDelete.name, n: classToDelete.student_count });
       $('#delete-class-reason').value = '';
       show($('#delete-class-modal'));
     });
@@ -1237,7 +1512,7 @@ async function loadAdminDatabase() {
 $('#add-class-btn').addEventListener('click', () => {
   classToEdit = null;
   $('#class-form').reset();
-  $('#class-form-title').textContent = 'Ajouter une classe';
+  $('#class-form-title').textContent = t('addClassTitle');
   show($('#class-form-modal'));
 });
 
@@ -1246,17 +1521,17 @@ $('#import-students-btn').addEventListener('click', async () => {
   const status = $('#import-students-status');
   const file = input.files?.[0];
   if (!file) {
-    showToast('Choisissez un fichier Excel, Word ou PDF', 'error');
+    showToast(t('chooseImportFile'), 'error');
     return;
   }
 
-  if (!confirm(`Importer « ${file.name} » ?\nLes élèves actifs actuels seront remplacés par la liste du fichier.`)) {
+  if (!confirm(t('importConfirm', { name: file.name }))) {
     return;
   }
 
   const formData = new FormData();
   formData.append('file', file);
-  status.textContent = 'Import en cours…';
+  status.textContent = t('importInProgress');
   show(status);
 
   try {
@@ -1280,7 +1555,7 @@ $('#reset-points-btn').addEventListener('click', () => {
 $('#confirm-reset-points-btn').addEventListener('click', async () => {
   const reason = $('#reset-points-reason').value.trim();
   if (!reason) {
-    showToast('Motif requis', 'error');
+    showToast(t('reasonRequiredShort'), 'error');
     return;
   }
 
@@ -1311,13 +1586,13 @@ $('#class-form').addEventListener('submit', async (e) => {
         method: 'PUT',
         body: JSON.stringify(payload)
       });
-      showToast('Classe modifiée');
+      showToast(t('classEdited'));
     } else {
       await api('/admin/classes', {
         method: 'POST',
         body: JSON.stringify(payload)
       });
-      showToast('Classe ajoutée');
+      showToast(t('classAdded'));
     }
 
     hide($('#class-form-modal'));
@@ -1331,7 +1606,7 @@ $('#class-form').addEventListener('submit', async (e) => {
 $('#confirm-delete-class-btn').addEventListener('click', async () => {
   const reason = $('#delete-class-reason').value.trim();
   if (!reason) {
-    showToast('Motif requis', 'error');
+    showToast(t('reasonRequiredShort'), 'error');
     return;
   }
 
@@ -1340,7 +1615,7 @@ $('#confirm-delete-class-btn').addEventListener('click', async () => {
       method: 'DELETE',
       body: JSON.stringify({ reason })
     });
-    showToast('Classe supprimée');
+    showToast(t('classDeleted'));
     hide($('#delete-class-modal'));
     await loadAdminDatabase();
     await loadClasses();
@@ -1359,7 +1634,7 @@ async function loadAdminLogs(type) {
     show($('#admin-logs-points'));
     const logs = await api('/logs/points');
     $('#admin-logs-points').innerHTML = logs.length === 0
-      ? '<p class="log-entry">Aucune modification enregistrée</p>'
+      ? `<p class="log-entry">${t('noPointsLogs')}</p>`
       : logs.map(l => `
         <div class="log-entry log-entry-actions">
           <div>
@@ -1370,7 +1645,7 @@ async function loadAdminLogs(type) {
             (${l.points_before} → ${l.points_after})
             <div class="history-meta">${l.reason} · ${l.user_name} · ${formatDate(l.created_at)}</div>
           </div>
-          <button class="btn btn-ghost btn-sm delete-log-btn" data-id="${l.id}" data-student-id="${l.student_id}">Supprimer</button>
+          <button class="btn btn-ghost btn-sm delete-log-btn" data-id="${l.id}" data-student-id="${l.student_id}">${t('delete')}</button>
         </div>
       `).join('');
 
@@ -1384,7 +1659,7 @@ async function loadAdminLogs(type) {
     show($('#admin-logs-students'));
     const logs = await api('/logs/students');
     $('#admin-logs-students').innerHTML = logs.length === 0
-      ? '<p class="log-entry">Aucune action enregistrée</p>'
+      ? `<p class="log-entry">${t('noActions')}</p>`
       : logs.map(l => `
         <div class="log-entry">
           <span class="log-action ${l.action}">${studentActionLabel(l.action)}</span>:
@@ -1396,7 +1671,7 @@ async function loadAdminLogs(type) {
     show($('#admin-logs-users'));
     const logs = await api('/logs/teachers');
     $('#admin-logs-users').innerHTML = logs.length === 0
-      ? '<p class="log-entry">Aucune action enregistrée</p>'
+      ? `<p class="log-entry">${t('noActions')}</p>`
       : logs.map(l => `
         <div class="log-entry">
           <span class="log-action ${l.action}">${userActionLabel(l.action)}</span>:
@@ -1493,7 +1768,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
 window.addEventListener('appinstalled', () => {
   deferredInstallPrompt = null;
   updateInstallButtons();
-  showToast('Application ajoutée à l’écran d’accueil');
+  showToast(t('appInstalled'));
 });
 
 $$('.install-app-btn').forEach((btn) => {
@@ -1505,6 +1780,34 @@ if ('serviceWorker' in navigator) {
 }
 
 updateInstallButtons();
+
+window.addEventListener('app-language-change', () => {
+  if (!currentUser) return;
+  const roleText = currentUser.role === 'surveillance' ? t('admin') : t('teacher');
+  $('#user-info').textContent = `${currentUser.fullName} · ${roleText}`;
+  if (currentClassId) applyStudentSearch();
+  else $('#current-class-name').textContent = t('selectClass');
+  if (selectedStudent && !$('#points-modal').classList.contains('hidden')) {
+    updateModalPoints();
+    loadHistory(selectedStudent.id);
+    loadStudentReport();
+  }
+  if (!$('#class-report-modal').classList.contains('hidden')) loadClassReport();
+  if (!$('#user-form-modal').classList.contains('hidden')) {
+    $('#user-form-title').textContent = userToEdit ? t('editUserTitle') : t('addUserTitle');
+  }
+  if (!$('#class-form-modal').classList.contains('hidden')) {
+    $('#class-form-title').textContent = classToEdit ? t('editClassTitle') : t('addClassTitle');
+  }
+  if (!$('#admin-dashboard').classList.contains('hidden')) {
+    loadAdminUsers();
+    if (!$('#admin-database-panel').classList.contains('hidden')) loadAdminDatabase();
+    const activeLog = document.querySelector('.admin-log-tabs .tab.active');
+    if (activeLog && !$('#admin-logs-panel').classList.contains('hidden')) {
+      loadAdminLogs(activeLog.dataset.adminLog);
+    }
+  }
+});
 
 // ─── Init ───────────────────────────────────────────────────────────────────
 
