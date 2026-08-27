@@ -41,7 +41,11 @@
             <label for="password" data-i18n="password">Mot de passe</label>
             <div class="password-wrapper">
               <input type="password" id="password" autocomplete="current-password" required placeholder="••••••••">
-              <button type="button" class="toggle-password" data-target="password" data-i18n-aria="showPassword" aria-label="Afficher le mot de passe">👁</button>
+              <button type="button" class="toggle-password" data-target="password" data-i18n-aria="showPassword" aria-label="Afficher le mot de passe">
+                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+                  <path fill="currentColor" d="M12 5C7.5 5 3.6 7.7 2 12c1.6 4.3 5.5 7 10 7s8.4-2.7 10-7c-1.6-4.3-5.5-7-10-7zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-2.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"/>
+                </svg>
+              </button>
             </div>
           </div>
           <button type="submit" class="btn btn-primary btn-full" data-i18n="login">Se connecter</button>
@@ -377,7 +381,11 @@
             <label for="user-password"><span data-i18n="password">Mot de passe</span> <span id="user-password-hint" class="hint hidden" data-i18n="passwordHint">(laisser vide pour ne pas changer)</span></label>
             <div class="password-wrapper">
               <input type="password" id="user-password" minlength="8" placeholder="••••••••" autocomplete="new-password">
-              <button type="button" class="toggle-password" data-target="user-password" data-i18n-aria="showPassword" aria-label="Afficher le mot de passe">👁</button>
+              <button type="button" class="toggle-password" data-target="user-password" data-i18n-aria="showPassword" aria-label="Afficher le mot de passe">
+                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+                  <path fill="currentColor" d="M12 5C7.5 5 3.6 7.7 2 12c1.6 4.3 5.5 7 10 7s8.4-2.7 10-7c-1.6-4.3-5.5-7-10-7zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-2.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"/>
+                </svg>
+              </button>
             </div>
           </div>
           <button type="submit" class="btn btn-primary btn-full" data-i18n="save">Enregistrer</button>

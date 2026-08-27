@@ -316,8 +316,9 @@ document.addEventListener('click', (e) => {
   if (!input) return;
   const visible = input.type === 'text';
   input.type = visible ? 'password' : 'text';
-  btn.textContent = '👁';
-  btn.setAttribute('aria-label', visible ? t('showPassword') : t('hidePassword'));
+  const nowVisible = input.type === 'text';
+  btn.classList.toggle('is-visible', nowVisible);
+  btn.setAttribute('aria-label', nowVisible ? t('hidePassword') : t('showPassword'));
 });
 
 // ─── Auth ───────────────────────────────────────────────────────────────────
