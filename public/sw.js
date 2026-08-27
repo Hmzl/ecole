@@ -1,4 +1,4 @@
-const CACHE = 'ecole-app-v3';
+const CACHE = 'ecole-app-v4';
 const PRECACHE = [
   '/',
   '/index.html',

@@ -316,7 +316,7 @@ document.addEventListener('click', (e) => {
   if (!input) return;
   const visible = input.type === 'text';
   input.type = visible ? 'password' : 'text';
-  btn.textContent = visible ? '👁' : '🙈';
+  btn.textContent = '👁';
   btn.setAttribute('aria-label', visible ? t('showPassword') : t('hidePassword'));
 });
 
