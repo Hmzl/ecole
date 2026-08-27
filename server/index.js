@@ -477,7 +477,7 @@ app.put('/api/admin/classes/:id', authMiddleware, requireRole('surveillance'), a
 
 app.delete('/api/admin/classes/:id', authMiddleware, requireRole('surveillance'), asyncHandler(async (req, res) => {
   try {
-    await deleteAdminClass(parseInt(req.params.id, 10), req.body);
+    await deleteAdminClass(parseInt(req.params.id, 10));
     res.json({ message: 'Classe supprimée' });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });

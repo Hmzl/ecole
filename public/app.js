@@ -1611,7 +1611,6 @@ async function loadAdminDatabase() {
       };
       $('#delete-class-name').textContent =
         t('deleteClassConfirm', { name: classToDelete.name, n: classToDelete.student_count });
-      $('#delete-class-reason').value = '';
       show($('#delete-class-modal'));
     });
   });
@@ -1712,16 +1711,9 @@ $('#class-form').addEventListener('submit', async (e) => {
 });
 
 $('#confirm-delete-class-btn').addEventListener('click', async () => {
-  const reason = $('#delete-class-reason').value.trim();
-  if (!reason) {
-    showToast(t('reasonRequiredShort'), 'error');
-    return;
-  }
-
   try {
     await api(`/admin/classes/${classToDelete.id}`, {
-      method: 'DELETE',
-      body: JSON.stringify({ reason })
+      method: 'DELETE'
     });
     showToast(t('classDeleted'));
     hide($('#delete-class-modal'));

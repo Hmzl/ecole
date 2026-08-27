@@ -316,11 +316,7 @@ export async function updateAdminClass(classId, { name }) {
   await run('UPDATE classes SET name = ? WHERE id = ?', [name.trim(), classId]);
 }
 
-export async function deleteAdminClass(classId, { reason }) {
-  if (!reason?.trim()) {
-    throw Object.assign(new Error('Un motif de suppression est requis'), { status: 400 });
-  }
-
+export async function deleteAdminClass(classId) {
   const cls = await get('SELECT * FROM classes WHERE id = ?', [classId]);
   if (!cls) throw Object.assign(new Error('Classe introuvable'), { status: 404 });
 
