@@ -12,7 +12,8 @@ import {
   getAdminStats, listAdminUsers, listAdminClasses,
   createAdminUser, updateAdminUser, deleteAdminUser,
   createAdminClass, updateAdminClass, deleteAdminClass,
-  deletePointLog, resetAllPoints, MAX_POINTS
+  deletePointLog, resetAllPoints, MAX_POINTS,
+  assertClassAccess, assertStudentAccess
 } from './admin.js';
 import { parseStudentsFile, applyStudentImport } from './import-students.js';
 import { buildStudentReport, buildClassReport, classReportToXlsx, classReportFilename } from './reports.js';
@@ -154,32 +155,52 @@ app.get('/api/auth/me', authMiddleware, (req, res) => {
 
 // ─── Classes ────────────────────────────────────────────────────────────────
 
-app.get('/api/classes', authMiddleware, asyncHandler(async (_req, res) => {
-  const classes = await all(`
-    SELECT c.*, COUNT(s.id) as student_count
-    FROM classes c
-    LEFT JOIN students s ON s.class_id = c.id AND s.active = 1
-    GROUP BY c.id
-    ORDER BY c.name
-  `);
+app.get('/api/classes', authMiddleware, asyncHandler(async (req, res) => {
+  const classes = req.user.role === 'teacher'
+    ? await all(`
+        SELECT c.*, COUNT(s.id) as student_count
+        FROM classes c
+        JOIN teacher_classes tc ON tc.class_id = c.id AND tc.user_id = ?
+        LEFT JOIN students s ON s.class_id = c.id AND s.active = 1
+        GROUP BY c.id
+        ORDER BY c.name
+      `, [req.user.id])
+    : await all(`
+        SELECT c.*, COUNT(s.id) as student_count
+        FROM classes c
+        LEFT JOIN students s ON s.class_id = c.id AND s.active = 1
+        GROUP BY c.id
+        ORDER BY c.name
+      `);
   res.json(classes);
 }));
 
 // ─── Students ───────────────────────────────────────────────────────────────
 
-app.get('/api/students', authMiddleware, asyncHandler(async (_req, res) => {
-  const students = await all(`
-    SELECT s.id, s.class_id, s.first_name, s.last_name, s.photo_path, s.points,
-           c.name as class_name
-    FROM students s
-    JOIN classes c ON c.id = s.class_id
-    WHERE s.active = 1
-    ORDER BY s.last_name, s.first_name
-  `);
+app.get('/api/students', authMiddleware, asyncHandler(async (req, res) => {
+  const students = req.user.role === 'teacher'
+    ? await all(`
+        SELECT s.id, s.class_id, s.first_name, s.last_name, s.photo_path, s.points,
+               c.name as class_name
+        FROM students s
+        JOIN classes c ON c.id = s.class_id
+        JOIN teacher_classes tc ON tc.class_id = s.class_id AND tc.user_id = ?
+        WHERE s.active = 1
+        ORDER BY s.last_name, s.first_name
+      `, [req.user.id])
+    : await all(`
+        SELECT s.id, s.class_id, s.first_name, s.last_name, s.photo_path, s.points,
+               c.name as class_name
+        FROM students s
+        JOIN classes c ON c.id = s.class_id
+        WHERE s.active = 1
+        ORDER BY s.last_name, s.first_name
+      `);
   res.json(students);
 }));
 
 app.get('/api/classes/:classId/students', authMiddleware, asyncHandler(async (req, res) => {
+  await assertClassAccess(req.user, req.params.classId);
   const students = await all(`
     SELECT id, class_id, first_name, last_name, photo_path, points
     FROM students
@@ -195,6 +216,7 @@ app.get('/api/students/:id', authMiddleware, asyncHandler(async (req, res) => {
     FROM students WHERE id = ? AND active = 1
   `, [req.params.id]);
   if (!student) return res.status(404).json({ error: 'Élève introuvable' });
+  await assertStudentAccess(req.user, student);
   res.json(student);
 }));
 
@@ -211,6 +233,7 @@ app.post('/api/students/:id/points', authMiddleware, requireRole('teacher', 'sur
 
   const student = await get('SELECT * FROM students WHERE id = ? AND active = 1', [req.params.id]);
   if (!student) return res.status(404).json({ error: 'Élève introuvable' });
+  await assertStudentAccess(req.user, student);
 
   const pointsBefore = Number(student.points) || 0;
   const pointsAfter = Math.max(0, Math.min(MAX_POINTS, pointsBefore + delta));
@@ -503,6 +526,8 @@ app.delete('/api/point-logs/:id', authMiddleware, requireRole('surveillance'), a
 // ─── History ────────────────────────────────────────────────────────────────
 
 app.get('/api/students/:id/report', authMiddleware, asyncHandler(async (req, res) => {
+  const student = await get('SELECT id, class_id FROM students WHERE id = ? AND active = 1', [req.params.id]);
+  await assertStudentAccess(req.user, student);
   const period = req.query.period === 'monthly' ? 'monthly' : 'daily';
   const value = period === 'monthly'
     ? (req.query.month || new Date().toISOString().slice(0, 7))
@@ -511,6 +536,7 @@ app.get('/api/students/:id/report', authMiddleware, asyncHandler(async (req, res
 }));
 
 app.get('/api/classes/:classId/report', authMiddleware, asyncHandler(async (req, res) => {
+  await assertClassAccess(req.user, req.params.classId);
   const period = req.query.period === 'monthly' ? 'monthly' : 'daily';
   const value = period === 'monthly'
     ? (req.query.month || new Date().toISOString().slice(0, 7))
@@ -519,6 +545,7 @@ app.get('/api/classes/:classId/report', authMiddleware, asyncHandler(async (req,
 }));
 
 app.get('/api/classes/:classId/report/export', authMiddleware, asyncHandler(async (req, res) => {
+  await assertClassAccess(req.user, req.params.classId);
   const period = req.query.period === 'monthly' ? 'monthly' : 'daily';
   const value = period === 'monthly'
     ? (req.query.month || new Date().toISOString().slice(0, 7))
@@ -532,6 +559,8 @@ app.get('/api/classes/:classId/report/export', authMiddleware, asyncHandler(asyn
 }));
 
 app.get('/api/students/:id/history', authMiddleware, asyncHandler(async (req, res) => {
+  const student = await get('SELECT id, class_id FROM students WHERE id = ? AND active = 1', [req.params.id]);
+  await assertStudentAccess(req.user, student);
   const history = await all(`
     SELECT pl.*, u.full_name as user_name
     FROM point_logs pl

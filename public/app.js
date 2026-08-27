@@ -1368,7 +1368,7 @@ async function loadAdminUsers() {
           ${roleBadge(u.role)}
           ${u.is_self ? `<span class="self-badge">${t('you')}</span>` : ''}
         </div>
-        <span class="account-meta">@${escapeHtml(u.username)}${u.email ? ` · ${escapeHtml(u.email)}` : ''}${u.role === 'teacher' && u.subject ? ` · ${escapeHtml(u.subject)}` : ''} · ${t('createdOn')} ${formatDate(u.created_at)}</span>
+        <span class="account-meta">@${escapeHtml(u.username)}${u.email ? ` · ${escapeHtml(u.email)}` : ''}${u.role === 'teacher' && u.subject ? ` · ${escapeHtml(u.subject)}` : ''}${u.role === 'teacher' && u.class_names?.length ? ` · ${escapeHtml(u.class_names.join(', '))}` : ''} · ${t('createdOn')} ${formatDate(u.created_at)}</span>
       </div>
       <div class="account-actions">
         <button class="btn btn-ghost btn-sm edit-user-btn" data-id="${u.id}">${t('edit')}</button>
@@ -1392,16 +1392,44 @@ async function loadAdminUsers() {
   });
 }
 
-function syncUserSubjectField() {
+function syncTeacherFields() {
   const isTeacher = $('#user-role').value === 'teacher';
   $('#user-subject-group').classList.toggle('hidden', !isTeacher);
+  $('#user-classes-group').classList.toggle('hidden', !isTeacher);
   $('#user-subject').required = isTeacher;
-  if (!isTeacher) $('#user-subject').value = '';
+  if (!isTeacher) {
+    $('#user-subject').value = '';
+    $$('#user-classes-list input[type="checkbox"]').forEach((cb) => { cb.checked = false; });
+  }
+}
+
+async function fillUserClassCheckboxes(selectedIds = []) {
+  const selected = new Set((selectedIds || []).map((id) => Number(id)));
+  const box = $('#user-classes-list');
+  try {
+    const classes = await api('/admin/classes');
+    if (!classes.length) {
+      box.innerHTML = `<p class="hint">${t('noClasses')}</p>`;
+      return;
+    }
+    box.innerHTML = classes.map((c) => `
+      <label>
+        <input type="checkbox" name="user-class" value="${c.id}" ${selected.has(c.id) ? 'checked' : ''}>
+        ${escapeHtml(c.name)}
+      </label>
+    `).join('');
+  } catch {
+    box.innerHTML = `<p class="hint">${t('noClasses')}</p>`;
+  }
+}
+
+function selectedTeacherClassIds() {
+  return [...$$('#user-classes-list input[name="user-class"]:checked')].map((cb) => parseInt(cb.value, 10));
 }
 
 $('#add-user-btn').addEventListener('click', () => openUserForm(null));
 
-function openUserForm(user) {
+async function openUserForm(user) {
   userToEdit = user;
   $('#user-form').reset();
   $('#user-form-title').textContent = user ? t('editUserTitle') : t('addUserTitle');
@@ -1417,11 +1445,12 @@ function openUserForm(user) {
     $('#user-subject').value = user.subject || '';
   }
 
-  syncUserSubjectField();
+  await fillUserClassCheckboxes(user?.role === 'teacher' ? user.class_ids : []);
+  syncTeacherFields();
   show($('#user-form-modal'));
 }
 
-$('#user-role').addEventListener('change', syncUserSubjectField);
+$('#user-role').addEventListener('change', syncTeacherFields);
 
 $('#user-form').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -1438,13 +1467,19 @@ $('#user-form').addEventListener('submit', async (e) => {
     showToast(t('subjectRequired'), 'error');
     return;
   }
+  const classIds = selectedTeacherClassIds();
+  if (role === 'teacher' && !classIds.length) {
+    showToast(t('classesRequired'), 'error');
+    return;
+  }
 
   const payload = {
     fullName: $('#user-full-name').value,
     username: $('#user-username').value,
     role,
     email,
-    subject: role === 'teacher' ? subject : ''
+    subject: role === 'teacher' ? subject : '',
+    classIds: role === 'teacher' ? classIds : []
   };
   const password = $('#user-password').value;
   if (password) payload.password = password;
@@ -1651,7 +1686,7 @@ $('#confirm-reset-points-btn').addEventListener('click', async () => {
 
 $('#class-form').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const payload = { name: $('#class-name').value, reason: $('#class-reason').value };
+  const payload = { name: $('#class-name').value };
 
   try {
     if (classToEdit) {

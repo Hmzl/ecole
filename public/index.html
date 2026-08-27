@@ -373,6 +373,10 @@
               <option value="Économie"></option>
             </datalist>
           </div>
+          <div class="form-group hidden" id="user-classes-group">
+            <label data-i18n="teacherClasses">Classes visibles</label>
+            <div id="user-classes-list" class="class-checkboxes"></div>
+          </div>
           <div class="form-group">
             <label for="user-email" data-i18n="email">E-mail</label>
             <input type="email" id="user-email" required autocomplete="email" data-i18n-placeholder="emailPlaceholder" placeholder="Ex: prof@ecole.ma">
@@ -425,10 +429,6 @@
           <div class="form-group">
             <label for="class-name" data-i18n="className">Nom de la classe</label>
             <input type="text" id="class-name" required data-i18n-placeholder="classNamePlaceholder" placeholder="Ex: 4ème A">
-          </div>
-          <div class="form-group">
-            <label for="class-reason" data-i18n="reason">Motif</label>
-            <textarea id="class-reason" rows="2" required></textarea>
           </div>
           <button type="submit" class="btn btn-primary btn-full" data-i18n="save">Enregistrer</button>
         </form>

@@ -147,6 +147,14 @@ export const SCHEMA_SQL = `
     created_at TEXT DEFAULT (datetime('now')),
     FOREIGN KEY (user_id) REFERENCES users(id)
   );
+
+  CREATE TABLE IF NOT EXISTS teacher_classes (
+    user_id INTEGER NOT NULL,
+    class_id INTEGER NOT NULL,
+    PRIMARY KEY (user_id, class_id),
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (class_id) REFERENCES classes(id)
+  );
 `;
 
 let schemaReady;
@@ -164,6 +172,20 @@ export async function ensureSchema() {
       } catch {
         // column already exists
       }
+    }
+    try {
+      await run(`
+        INSERT INTO teacher_classes (user_id, class_id)
+        SELECT u.id, c.id
+        FROM users u
+        CROSS JOIN classes c
+        WHERE u.role = 'teacher'
+          AND NOT EXISTS (
+            SELECT 1 FROM teacher_classes tc WHERE tc.user_id = u.id
+          )
+      `);
+    } catch {
+      // ignore if tables are empty or already assigned
     }
     try {
       await run('PRAGMA foreign_keys = ON');

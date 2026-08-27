@@ -89,9 +89,23 @@ export async function listAdminUsers(currentUserId) {
     FROM users
     ORDER BY role DESC, full_name
   `);
+  const links = await all(`
+    SELECT tc.user_id, tc.class_id, c.name as class_name
+    FROM teacher_classes tc
+    JOIN classes c ON c.id = tc.class_id
+    ORDER BY c.name
+  `);
+  const byUser = {};
+  for (const link of links) {
+    if (!byUser[link.user_id]) byUser[link.user_id] = { ids: [], names: [] };
+    byUser[link.user_id].ids.push(link.class_id);
+    byUser[link.user_id].names.push(link.class_name);
+  }
   return users.map((user) => ({
     ...user,
-    is_self: user.id === currentUserId
+    is_self: user.id === currentUserId,
+    class_ids: byUser[user.id]?.ids || [],
+    class_names: byUser[user.id]?.names || []
   }));
 }
 
@@ -115,7 +129,52 @@ function normalizeEmail(email) {
   return value;
 }
 
-export async function createAdminUser(actorId, { username, password, fullName, role, email, subject }) {
+export async function userCanAccessClass(user, classId) {
+  if (!user || classId == null) return false;
+  if (user.role === 'surveillance') return true;
+  const row = await get(
+    'SELECT 1 AS ok FROM teacher_classes WHERE user_id = ? AND class_id = ?',
+    [user.id, Number(classId)]
+  );
+  return Boolean(row);
+}
+
+export async function assertClassAccess(user, classId) {
+  if (await userCanAccessClass(user, classId)) return;
+  throw Object.assign(new Error('Accès non autorisé à cette classe'), { status: 403 });
+}
+
+export async function assertStudentAccess(user, student) {
+  if (!student) throw Object.assign(new Error('Élève introuvable'), { status: 404 });
+  await assertClassAccess(user, student.class_id);
+}
+
+export async function setTeacherClasses(userId, classIds) {
+  const ids = [...new Set(
+    (Array.isArray(classIds) ? classIds : [])
+      .map((id) => parseInt(id, 10))
+      .filter((id) => Number.isInteger(id) && id > 0)
+  )];
+  if (!ids.length) {
+    throw Object.assign(new Error('Sélectionnez au moins une classe pour l\'enseignant'), { status: 400 });
+  }
+  const placeholders = ids.map(() => '?').join(',');
+  const existing = await all(`SELECT id FROM classes WHERE id IN (${placeholders})`, ids);
+  if (existing.length !== ids.length) {
+    throw Object.assign(new Error('Une ou plusieurs classes sont introuvables'), { status: 400 });
+  }
+  await run('DELETE FROM teacher_classes WHERE user_id = ?', [userId]);
+  for (const classId of ids) {
+    await run('INSERT INTO teacher_classes (user_id, class_id) VALUES (?, ?)', [userId, classId]);
+  }
+  return ids;
+}
+
+export async function clearTeacherClasses(userId) {
+  await run('DELETE FROM teacher_classes WHERE user_id = ?', [userId]);
+}
+
+export async function createAdminUser(actorId, { username, password, fullName, role, email, subject, classIds }) {
   if (!username?.trim() || !fullName?.trim()) {
     throw Object.assign(new Error('Nom et identifiant requis'), { status: 400 });
   }
@@ -147,10 +206,14 @@ export async function createAdminUser(actorId, { username, password, fullName, r
     VALUES (?, ?, 'add', ?, ?)
   `, [result.lastInsertRowid, actorId, fullName.trim(), role === 'teacher' ? `Compte enseignant (${matter})` : 'Compte surveillance']);
 
+  if (role === 'teacher') {
+    await setTeacherClasses(result.lastInsertRowid, classIds);
+  }
+
   return result.lastInsertRowid;
 }
 
-export async function updateAdminUser(actorId, userId, { username, password, fullName, role, email, subject }) {
+export async function updateAdminUser(actorId, userId, { username, password, fullName, role, email, subject, classIds }) {
   if (!username?.trim() || !fullName?.trim()) {
     throw Object.assign(new Error('Nom et identifiant requis'), { status: 400 });
   }
@@ -197,6 +260,12 @@ export async function updateAdminUser(actorId, userId, { username, password, ful
     INSERT INTO user_logs (target_user_id, user_id, action, target_name, reason)
     VALUES (?, ?, 'edit', ?, ?)
   `, [user.id, actorId, fullName.trim(), newRole === 'teacher' ? `Mise à jour enseignant (${matter})` : 'Mise à jour du compte']);
+
+  if (newRole === 'teacher') {
+    await setTeacherClasses(user.id, classIds);
+  } else {
+    await clearTeacherClasses(user.id);
+  }
 }
 
 export async function deleteAdminUser(actorId, userId, reason) {
@@ -213,6 +282,7 @@ export async function deleteAdminUser(actorId, userId, reason) {
     throw Object.assign(new Error('Impossible de supprimer le dernier compte surveillance'), { status: 400 });
   }
 
+  await run('DELETE FROM teacher_classes WHERE user_id = ?', [user.id]);
   await run('DELETE FROM users WHERE id = ?', [user.id]);
   await run(`
     INSERT INTO user_logs (target_user_id, user_id, action, target_name, reason)
@@ -220,9 +290,9 @@ export async function deleteAdminUser(actorId, userId, reason) {
   `, [user.id, actorId, user.full_name, reason.trim()]);
 }
 
-export async function createAdminClass(actorId, { name, reason }) {
-  if (!name?.trim() || !reason?.trim()) {
-    throw Object.assign(new Error('Nom de classe et motif requis'), { status: 400 });
+export async function createAdminClass(actorId, { name }) {
+  if (!name?.trim()) {
+    throw Object.assign(new Error('Nom de classe requis'), { status: 400 });
   }
 
   const existing = await get('SELECT id FROM classes WHERE name = ?', [name.trim()]);
@@ -232,9 +302,9 @@ export async function createAdminClass(actorId, { name, reason }) {
   return result.lastInsertRowid;
 }
 
-export async function updateAdminClass(classId, { name, reason }) {
-  if (!name?.trim() || !reason?.trim()) {
-    throw Object.assign(new Error('Nom de classe et motif requis'), { status: 400 });
+export async function updateAdminClass(classId, { name }) {
+  if (!name?.trim()) {
+    throw Object.assign(new Error('Nom de classe requis'), { status: 400 });
   }
 
   const cls = await get('SELECT * FROM classes WHERE id = ?', [classId]);
@@ -262,5 +332,6 @@ export async function deleteAdminClass(classId, { reason }) {
     throw Object.assign(new Error('Impossible de supprimer une classe contenant des élèves actifs'), { status: 400 });
   }
 
+  await run('DELETE FROM teacher_classes WHERE class_id = ?', [classId]);
   await run('DELETE FROM classes WHERE id = ?', [classId]);
 }
