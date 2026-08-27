@@ -294,11 +294,6 @@ app.post('/api/students', authMiddleware, requireRole('surveillance'), upload.si
 }));
 
 app.delete('/api/students/:id', authMiddleware, requireRole('surveillance'), asyncHandler(async (req, res) => {
-  const { reason } = req.body;
-  if (!reason?.trim()) {
-    return res.status(400).json({ error: 'Un motif de suppression est requis' });
-  }
-
   const student = await get('SELECT * FROM students WHERE id = ? AND active = 1', [req.params.id]);
   if (!student) return res.status(404).json({ error: 'Élève introuvable' });
 
@@ -306,7 +301,7 @@ app.delete('/api/students/:id', authMiddleware, requireRole('surveillance'), asy
   await run(`
     INSERT INTO student_logs (student_id, user_id, action, student_name, class_id, reason)
     VALUES (?, ?, 'remove', ?, ?, ?)
-  `, [student.id, req.user.id, `${student.first_name} ${student.last_name}`, student.class_id, reason.trim()]);
+  `, [student.id, req.user.id, `${student.first_name} ${student.last_name}`, student.class_id, 'Suppression']);
 
   res.json({ message: 'Élève supprimé' });
 }));
@@ -399,19 +394,15 @@ app.put('/api/teachers/:id', authMiddleware, requireRole('surveillance'), asyncH
 }));
 
 app.delete('/api/teachers/:id', authMiddleware, requireRole('surveillance'), asyncHandler(async (req, res) => {
-  const { reason } = req.body;
-  if (!reason?.trim()) {
-    return res.status(400).json({ error: 'Un motif de suppression est requis' });
-  }
-
   const teacher = await get('SELECT * FROM users WHERE id = ? AND role = ?', [req.params.id, 'teacher']);
   if (!teacher) return res.status(404).json({ error: 'Enseignant introuvable' });
 
+  await run('DELETE FROM teacher_classes WHERE user_id = ?', [teacher.id]);
   await run('DELETE FROM users WHERE id = ?', [teacher.id]);
   await run(`
     INSERT INTO user_logs (target_user_id, user_id, action, target_name, reason)
     VALUES (?, ?, 'remove', ?, ?)
-  `, [teacher.id, req.user.id, teacher.full_name, reason.trim()]);
+  `, [teacher.id, req.user.id, teacher.full_name, 'Suppression']);
 
   res.json({ message: 'Enseignant supprimé' });
 }));
@@ -446,7 +437,7 @@ app.put('/api/admin/users/:id', authMiddleware, requireRole('surveillance'), asy
 
 app.delete('/api/admin/users/:id', authMiddleware, requireRole('surveillance'), asyncHandler(async (req, res) => {
   try {
-    await deleteAdminUser(req.user.id, parseInt(req.params.id, 10), req.body.reason);
+    await deleteAdminUser(req.user.id, parseInt(req.params.id, 10));
     res.json({ message: 'Utilisateur supprimé' });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
@@ -516,7 +507,7 @@ app.post('/api/admin/import-students', authMiddleware, requireRole('surveillance
 
 app.delete('/api/point-logs/:id', authMiddleware, requireRole('surveillance'), asyncHandler(async (req, res) => {
   try {
-    const result = await deletePointLog(req.user.id, parseInt(req.params.id, 10), req.body.reason);
+    const result = await deletePointLog(req.user.id, parseInt(req.params.id, 10));
     res.json({ ...result, message: 'Entrée supprimée de l\'historique' });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });

@@ -614,21 +614,13 @@ function openDeleteHistoryModal(entry, studentId) {
   const sign = entry.points_change > 0 ? '+' : '';
   $('#delete-history-info').textContent =
     t('deleteHistoryConfirm', { detail: `${sign}${entry.points_change} pts → ${entry.points_after} pts`, reason: entry.reason });
-  $('#delete-history-reason').value = '';
   show($('#delete-history-modal'));
 }
 
 $('#confirm-delete-history-btn').addEventListener('click', async () => {
-  const reason = $('#delete-history-reason').value.trim();
-  if (!reason) {
-    showToast(t('reasonRequiredShort'), 'error');
-    return;
-  }
-
   try {
     const result = await api(`/point-logs/${historyToDelete.id}`, {
-      method: 'DELETE',
-      body: JSON.stringify({ reason })
+      method: 'DELETE'
     });
 
     showToast(t('entryDeleted'));
@@ -1283,21 +1275,13 @@ function openDeleteModal(student) {
   studentToDelete = student;
   $('#delete-student-name').textContent =
     t('deleteStudentConfirm', { first: student.first_name, last: student.last_name });
-  $('#delete-reason').value = '';
   show($('#delete-modal'));
 }
 
 $('#confirm-delete-btn').addEventListener('click', async () => {
-  const reason = $('#delete-reason').value.trim();
-  if (!reason) {
-    showToast(t('deleteReasonRequired'), 'error');
-    return;
-  }
-
   try {
     await api(`/students/${studentToDelete.id}`, {
-      method: 'DELETE',
-      body: JSON.stringify({ reason })
+      method: 'DELETE'
     });
     showToast(t('studentDeleted'));
     hide($('#delete-modal'));
@@ -1514,21 +1498,13 @@ function openDeleteUserModal(user) {
   userToDelete = user;
   $('#delete-user-name').textContent =
     t('deleteUserConfirm', { name: user.full_name, username: user.username });
-  $('#delete-user-reason').value = '';
   show($('#delete-user-modal'));
 }
 
 $('#confirm-delete-user-btn').addEventListener('click', async () => {
-  const reason = $('#delete-user-reason').value.trim();
-  if (!reason) {
-    showToast(t('deleteReasonRequired'), 'error');
-    return;
-  }
-
   try {
     await api(`/admin/users/${userToDelete.id}`, {
-      method: 'DELETE',
-      body: JSON.stringify({ reason })
+      method: 'DELETE'
     });
     showToast(t('userDeleted'));
     hide($('#delete-user-modal'));

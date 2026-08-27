@@ -20,11 +20,7 @@ export async function recalculateStudentPoints(studentId) {
   return points;
 }
 
-export async function deletePointLog(actorId, logId, reason) {
-  if (!reason?.trim()) {
-    throw Object.assign(new Error('Un motif de suppression est requis'), { status: 400 });
-  }
-
+export async function deletePointLog(actorId, logId) {
   const log = await get('SELECT * FROM point_logs WHERE id = ?', [logId]);
   if (!log) throw Object.assign(new Error('Entrée introuvable'), { status: 404 });
 
@@ -268,11 +264,7 @@ export async function updateAdminUser(actorId, userId, { username, password, ful
   }
 }
 
-export async function deleteAdminUser(actorId, userId, reason) {
-  if (!reason?.trim()) {
-    throw Object.assign(new Error('Un motif de suppression est requis'), { status: 400 });
-  }
-
+export async function deleteAdminUser(actorId, userId) {
   const user = await get('SELECT * FROM users WHERE id = ?', [userId]);
   if (!user) throw Object.assign(new Error('Utilisateur introuvable'), { status: 404 });
   if (user.id === actorId) {
@@ -287,7 +279,7 @@ export async function deleteAdminUser(actorId, userId, reason) {
   await run(`
     INSERT INTO user_logs (target_user_id, user_id, action, target_name, reason)
     VALUES (?, ?, 'remove', ?, ?)
-  `, [user.id, actorId, user.full_name, reason.trim()]);
+  `, [user.id, actorId, user.full_name, 'Suppression']);
 }
 
 export async function createAdminClass(actorId, { name }) {
