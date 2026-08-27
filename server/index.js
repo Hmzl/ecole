@@ -9,9 +9,10 @@ import { fileURLToPath } from 'url';
 import { get, all, run, ensureSchema } from './db.js';
 import { signToken, authMiddleware, requireRole } from './auth.js';
 import {
-  getAdminStats, listAdminUsers, listAdminClasses,
+  getAdminStats, listAdminUsers, listAdminClasses, listAdminSubjects,
   createAdminUser, updateAdminUser, deleteAdminUser,
   createAdminClass, updateAdminClass, deleteAdminClass,
+  createAdminSubject, updateAdminSubject, deleteAdminSubject,
   deletePointLog, resetAllPoints, MAX_POINTS,
   assertClassAccess, assertStudentAccess
 } from './admin.js';
@@ -470,6 +471,37 @@ app.delete('/api/admin/classes/:id', authMiddleware, requireRole('surveillance')
   try {
     await deleteAdminClass(parseInt(req.params.id, 10));
     res.json({ message: 'Classe supprimée' });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+}));
+
+app.get('/api/admin/subjects', authMiddleware, requireRole('surveillance'), asyncHandler(async (_req, res) => {
+  res.json(await listAdminSubjects());
+}));
+
+app.post('/api/admin/subjects', authMiddleware, requireRole('surveillance'), asyncHandler(async (req, res) => {
+  try {
+    const id = await createAdminSubject(req.body);
+    res.status(201).json({ id, message: 'Matière créée avec succès' });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+}));
+
+app.put('/api/admin/subjects/:id', authMiddleware, requireRole('surveillance'), asyncHandler(async (req, res) => {
+  try {
+    await updateAdminSubject(parseInt(req.params.id, 10), req.body);
+    res.json({ message: 'Matière modifiée avec succès' });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+}));
+
+app.delete('/api/admin/subjects/:id', authMiddleware, requireRole('surveillance'), asyncHandler(async (req, res) => {
+  try {
+    await deleteAdminSubject(parseInt(req.params.id, 10));
+    res.json({ message: 'Matière supprimée' });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
   }

@@ -10,6 +10,8 @@ let userToEdit = null;
 let userToDelete = null;
 let classToEdit = null;
 let classToDelete = null;
+let subjectToEdit = null;
+let subjectToDelete = null;
 let studentToEdit = null;
 let historyToDelete = null;
 let adminUserFilter = 'all';
@@ -1387,6 +1389,22 @@ function syncTeacherFields() {
   }
 }
 
+async function fillUserSubjectSelect(selected = '') {
+  const select = $('#user-subject');
+  const current = selected || '';
+  try {
+    const subjects = await api('/admin/subjects');
+    const names = subjects.map((s) => s.name);
+    if (current && !names.includes(current)) names.unshift(current);
+    select.innerHTML = `<option value="">${escapeHtml(t('chooseSubject'))}</option>` +
+      names.map((name) => `<option value="${escapeHtml(name)}"${name === current ? ' selected' : ''}>${escapeHtml(name)}</option>`).join('');
+  } catch {
+    select.innerHTML = current
+      ? `<option value="${escapeHtml(current)}" selected>${escapeHtml(current)}</option>`
+      : `<option value="">${escapeHtml(t('chooseSubject'))}</option>`;
+  }
+}
+
 async function fillUserClassCheckboxes(selectedIds = []) {
   const selected = new Set((selectedIds || []).map((id) => Number(id)));
   const box = $('#user-classes-list');
@@ -1426,9 +1444,9 @@ async function openUserForm(user) {
     $('#user-username').value = user.username;
     $('#user-role').value = user.role;
     $('#user-email').value = user.email || '';
-    $('#user-subject').value = user.subject || '';
   }
 
+  await fillUserSubjectSelect(user?.role === 'teacher' ? (user.subject || '') : '');
   await fillUserClassCheckboxes(user?.role === 'teacher' ? user.class_ids : []);
   syncTeacherFields();
   show($('#user-form-modal'));
@@ -1443,10 +1461,6 @@ $('#user-form').addEventListener('submit', async (e) => {
   const email = $('#user-email').value.trim();
   const subject = $('#user-subject').value.trim();
 
-  if (!email) {
-    showToast(t('emailRequired'), 'error');
-    return;
-  }
   if (role === 'teacher' && !subject) {
     showToast(t('subjectRequired'), 'error');
     return;
@@ -1515,9 +1529,10 @@ $('#confirm-delete-user-btn').addEventListener('click', async () => {
 });
 
 async function loadAdminDatabase() {
-  const [stats, classes] = await Promise.all([
+  const [stats, classes, subjects] = await Promise.all([
     api('/admin/stats'),
-    api('/admin/classes')
+    api('/admin/classes'),
+    api('/admin/subjects')
   ]);
 
   $('#admin-stats').innerHTML = `
@@ -1590,6 +1605,54 @@ async function loadAdminDatabase() {
       show($('#delete-class-modal'));
     });
   });
+
+  const subjectList = $('#admin-subjects-list');
+  if (subjects.length === 0) {
+    subjectList.innerHTML = `<p class="empty-msg">${t('noSubjects')}</p>`;
+  } else {
+    subjectList.innerHTML = `
+      <div class="classes-table-header">
+        <span>${t('subjects')}</span>
+        <span>${t('filterTeachers')}</span>
+        <span>${t('createdAt')}</span>
+        <span>${t('actions')}</span>
+      </div>
+      ${subjects.map((s) => `
+        <div class="classes-table-row">
+          <strong>${escapeHtml(s.name)}</strong>
+          <span>${s.teacher_count}</span>
+          <span class="account-meta">${formatDate(s.created_at)}</span>
+          <div class="account-actions">
+            <button class="btn btn-ghost btn-sm edit-subject-btn" data-id="${s.id}" data-name="${escapeHtml(s.name)}">${t('edit')}</button>
+            <button class="btn btn-ghost btn-sm delete-subject-btn" data-id="${s.id}" data-name="${escapeHtml(s.name)}" data-count="${s.teacher_count}">${t('delete')}</button>
+          </div>
+        </div>
+      `).join('')}
+    `;
+
+    subjectList.querySelectorAll('.edit-subject-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        subjectToEdit = { id: parseInt(btn.dataset.id, 10), name: btn.dataset.name };
+        $('#subject-form').reset();
+        $('#subject-form-title').textContent = t('editSubjectTitle');
+        $('#subject-name').value = subjectToEdit.name;
+        show($('#subject-form-modal'));
+      });
+    });
+
+    subjectList.querySelectorAll('.delete-subject-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        subjectToDelete = {
+          id: parseInt(btn.dataset.id, 10),
+          name: btn.dataset.name,
+          teacher_count: parseInt(btn.dataset.count, 10)
+        };
+        $('#delete-subject-name').textContent =
+          t('deleteSubjectConfirm', { name: subjectToDelete.name, n: subjectToDelete.teacher_count });
+        show($('#delete-subject-modal'));
+      });
+    });
+  }
 }
 
 $('#add-class-btn').addEventListener('click', () => {
@@ -1597,6 +1660,13 @@ $('#add-class-btn').addEventListener('click', () => {
   $('#class-form').reset();
   $('#class-form-title').textContent = t('addClassTitle');
   show($('#class-form-modal'));
+});
+
+$('#add-subject-btn').addEventListener('click', () => {
+  subjectToEdit = null;
+  $('#subject-form').reset();
+  $('#subject-form-title').textContent = t('addSubjectTitle');
+  show($('#subject-form-modal'));
 });
 
 $('#import-students-btn').addEventListener('click', async () => {
@@ -1695,6 +1765,45 @@ $('#confirm-delete-class-btn').addEventListener('click', async () => {
     hide($('#delete-class-modal'));
     await loadAdminDatabase();
     await loadClasses();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+});
+
+$('#subject-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const payload = { name: $('#subject-name').value };
+
+  try {
+    if (subjectToEdit) {
+      await api(`/admin/subjects/${subjectToEdit.id}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload)
+      });
+      showToast(t('subjectEdited'));
+    } else {
+      await api('/admin/subjects', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      showToast(t('subjectAdded'));
+    }
+
+    hide($('#subject-form-modal'));
+    await loadAdminDatabase();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+});
+
+$('#confirm-delete-subject-btn').addEventListener('click', async () => {
+  try {
+    await api(`/admin/subjects/${subjectToDelete.id}`, {
+      method: 'DELETE'
+    });
+    showToast(t('subjectDeleted'));
+    hide($('#delete-subject-modal'));
+    await loadAdminDatabase();
   } catch (err) {
     showToast(err.message, 'error');
   }

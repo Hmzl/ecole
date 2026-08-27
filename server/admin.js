@@ -116,6 +116,28 @@ export async function listAdminClasses() {
   `);
 }
 
+export async function listAdminSubjects() {
+  return all(`
+    SELECT s.id, s.name, s.created_at,
+           COUNT(u.id) as teacher_count
+    FROM subjects s
+    LEFT JOIN users u ON u.role = 'teacher' AND u.subject = s.name
+    GROUP BY s.id
+    ORDER BY s.name
+  `);
+}
+
+async function resolveTeacherSubject(subject, { allowName } = {}) {
+  const matter = String(subject || '').trim();
+  if (!matter) {
+    throw Object.assign(new Error('La matière est requise pour un enseignant'), { status: 400 });
+  }
+  const row = await get('SELECT name FROM subjects WHERE name = ?', [matter]);
+  if (row) return row.name;
+  if (allowName && String(allowName).trim() === matter) return matter;
+  throw Object.assign(new Error('Matière introuvable'), { status: 400 });
+}
+
 function normalizeEmail(email) {
   const value = String(email || '').trim().toLowerCase();
   if (!value) return '';
@@ -178,24 +200,22 @@ export async function createAdminUser(actorId, { username, password, fullName, r
     throw Object.assign(new Error('Rôle invalide'), { status: 400 });
   }
   const mail = normalizeEmail(email);
-  if (!mail) throw Object.assign(new Error('L\'e-mail est requis'), { status: 400 });
-  const matter = role === 'teacher' ? String(subject || '').trim() : '';
-  if (role === 'teacher' && !matter) {
-    throw Object.assign(new Error('La matière est requise pour un enseignant'), { status: 400 });
-  }
+  const matter = role === 'teacher' ? await resolveTeacherSubject(subject) : '';
   const pwdError = validatePassword(password);
   if (pwdError) throw Object.assign(new Error(pwdError), { status: 400 });
 
   const existing = await get('SELECT id FROM users WHERE username = ?', [username.trim()]);
   if (existing) throw Object.assign(new Error('Ce nom d\'utilisateur existe déjà'), { status: 409 });
-  const emailTaken = await get('SELECT id FROM users WHERE lower(email) = ?', [mail]);
-  if (emailTaken) throw Object.assign(new Error('Cet e-mail est déjà utilisé'), { status: 409 });
+  if (mail) {
+    const emailTaken = await get('SELECT id FROM users WHERE email IS NOT NULL AND lower(email) = ?', [mail]);
+    if (emailTaken) throw Object.assign(new Error('Cet e-mail est déjà utilisé'), { status: 409 });
+  }
 
   const hash = bcrypt.hashSync(password, 12);
   const result = await run(`
     INSERT INTO users (username, password_hash, full_name, role, email, subject)
     VALUES (?, ?, ?, ?, ?, ?)
-  `, [username.trim(), hash, fullName.trim(), role, mail, matter || null]);
+  `, [username.trim(), hash, fullName.trim(), role, mail || null, matter || null]);
 
   await run(`
     INSERT INTO user_logs (target_user_id, user_id, action, target_name, reason)
@@ -224,15 +244,16 @@ export async function updateAdminUser(actorId, userId, { username, password, ful
   if (duplicate) throw Object.assign(new Error('Ce nom d\'utilisateur existe déjà'), { status: 409 });
 
   const mail = normalizeEmail(email);
-  if (!mail) throw Object.assign(new Error('L\'e-mail est requis'), { status: 400 });
-  const emailTaken = await get('SELECT id FROM users WHERE lower(email) = ? AND id != ?', [mail, user.id]);
-  if (emailTaken) throw Object.assign(new Error('Cet e-mail est déjà utilisé'), { status: 409 });
+  if (mail) {
+    const emailTaken = await get(
+      'SELECT id FROM users WHERE email IS NOT NULL AND lower(email) = ? AND id != ?',
+      [mail, user.id]
+    );
+    if (emailTaken) throw Object.assign(new Error('Cet e-mail est déjà utilisé'), { status: 409 });
+  }
 
   const newRole = role || user.role;
-  const matter = newRole === 'teacher' ? String(subject || '').trim() : '';
-  if (newRole === 'teacher' && !matter) {
-    throw Object.assign(new Error('La matière est requise pour un enseignant'), { status: 400 });
-  }
+  const matter = newRole === 'teacher' ? await resolveTeacherSubject(subject, { allowName: user.subject }) : '';
   if (user.role === 'surveillance' && newRole !== 'surveillance' && (await countSurveillanceUsers(user.id)) === 0) {
     throw Object.assign(new Error('Impossible de retirer le dernier compte surveillance'), { status: 400 });
   }
@@ -243,12 +264,12 @@ export async function updateAdminUser(actorId, userId, { username, password, ful
     const hash = bcrypt.hashSync(password, 12);
     await run(
       'UPDATE users SET username = ?, full_name = ?, role = ?, email = ?, subject = ?, password_hash = ? WHERE id = ?',
-      [username.trim(), fullName.trim(), newRole, mail, matter || null, hash, user.id]
+      [username.trim(), fullName.trim(), newRole, mail || null, matter || null, hash, user.id]
     );
   } else {
     await run(
       'UPDATE users SET username = ?, full_name = ?, role = ?, email = ?, subject = ? WHERE id = ?',
-      [username.trim(), fullName.trim(), newRole, mail, matter || null, user.id]
+      [username.trim(), fullName.trim(), newRole, mail || null, matter || null, user.id]
     );
   }
 
@@ -322,4 +343,45 @@ export async function deleteAdminClass(classId) {
 
   await run('DELETE FROM teacher_classes WHERE class_id = ?', [classId]);
   await run('DELETE FROM classes WHERE id = ?', [classId]);
+}
+
+export async function createAdminSubject({ name }) {
+  if (!name?.trim()) {
+    throw Object.assign(new Error('Nom de matière requis'), { status: 400 });
+  }
+  const existing = await get('SELECT id FROM subjects WHERE lower(name) = lower(?)', [name.trim()]);
+  if (existing) throw Object.assign(new Error('Cette matière existe déjà'), { status: 409 });
+
+  const result = await run('INSERT INTO subjects (name) VALUES (?)', [name.trim()]);
+  return result.lastInsertRowid;
+}
+
+export async function updateAdminSubject(subjectId, { name }) {
+  if (!name?.trim()) {
+    throw Object.assign(new Error('Nom de matière requis'), { status: 400 });
+  }
+
+  const subject = await get('SELECT * FROM subjects WHERE id = ?', [subjectId]);
+  if (!subject) throw Object.assign(new Error('Matière introuvable'), { status: 404 });
+
+  const duplicate = await get('SELECT id FROM subjects WHERE lower(name) = lower(?) AND id != ?', [name.trim(), subjectId]);
+  if (duplicate) throw Object.assign(new Error('Cette matière existe déjà'), { status: 409 });
+
+  await run('UPDATE users SET subject = ? WHERE subject = ?', [name.trim(), subject.name]);
+  await run('UPDATE subjects SET name = ? WHERE id = ?', [name.trim(), subjectId]);
+}
+
+export async function deleteAdminSubject(subjectId) {
+  const subject = await get('SELECT * FROM subjects WHERE id = ?', [subjectId]);
+  if (!subject) throw Object.assign(new Error('Matière introuvable'), { status: 404 });
+
+  const teachers = (await get(
+    'SELECT COUNT(*) as count FROM users WHERE role = ? AND subject = ?',
+    ['teacher', subject.name]
+  )).count;
+  if (teachers > 0) {
+    throw Object.assign(new Error('Impossible de supprimer une matière encore attribuée à un enseignant'), { status: 400 });
+  }
+
+  await run('DELETE FROM subjects WHERE id = ?', [subjectId]);
 }

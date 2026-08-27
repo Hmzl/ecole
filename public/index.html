@@ -315,6 +315,13 @@
             </div>
             <div id="admin-classes-list" class="classes-table"></div>
           </div>
+          <div class="admin-section">
+            <div class="admin-section-header">
+              <h4 data-i18n="subjects">Matières</h4>
+              <button id="add-subject-btn" class="btn btn-secondary btn-sm" data-i18n="addSubject">+ Ajouter une matière</button>
+            </div>
+            <div id="admin-subjects-list" class="classes-table"></div>
+          </div>
         </div>
 
         <!-- Logs tab -->
@@ -357,29 +364,17 @@
           </div>
           <div class="form-group" id="user-subject-group">
             <label for="user-subject" data-i18n="teacherSubject">Matière enseignée</label>
-            <input type="text" id="user-subject" list="subject-suggestions" data-i18n-placeholder="subjectPlaceholder" placeholder="Ex: Mathématiques, Arabe, Français…">
-            <datalist id="subject-suggestions">
-              <option value="Mathématiques"></option>
-              <option value="Arabe"></option>
-              <option value="Français"></option>
-              <option value="Anglais"></option>
-              <option value="Physique-Chimie"></option>
-              <option value="SVT"></option>
-              <option value="Histoire-Géographie"></option>
-              <option value="Éducation islamique"></option>
-              <option value="Informatique"></option>
-              <option value="EPS"></option>
-              <option value="Philosophie"></option>
-              <option value="Économie"></option>
-            </datalist>
+            <select id="user-subject">
+              <option value="" data-i18n="chooseSubject">Choisir une matière</option>
+            </select>
           </div>
           <div class="form-group hidden" id="user-classes-group">
             <label data-i18n="teacherClasses">Classes visibles</label>
             <div id="user-classes-list" class="class-checkboxes"></div>
           </div>
           <div class="form-group">
-            <label for="user-email" data-i18n="email">E-mail</label>
-            <input type="email" id="user-email" required autocomplete="email" data-i18n-placeholder="emailPlaceholder" placeholder="Ex: prof@ecole.ma">
+            <label for="user-email" data-i18n="email">E-mail (optionnel)</label>
+            <input type="email" id="user-email" autocomplete="email" data-i18n-placeholder="emailPlaceholder" placeholder="Ex: prof@ecole.ma">
           </div>
           <div class="form-group">
             <label for="user-password"><span data-i18n="password">Mot de passe</span> <span id="user-password-hint" class="hint hidden" data-i18n="passwordHint">(laisser vide pour ne pas changer)</span></label>
@@ -442,6 +437,40 @@
         <p id="delete-class-name" class="delete-warning"></p>
         <div class="modal-actions">
           <button id="confirm-delete-class-btn" class="btn btn-danger" data-i18n="confirm">Confirmer</button>
+          <button class="modal-close btn btn-ghost" data-i18n="cancel">Annuler</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add/Edit subject modal -->
+    <div id="subject-form-modal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content modal-sm">
+        <div class="modal-header">
+          <h3 id="subject-form-title" data-i18n="addSubjectTitle">Ajouter une matière</h3>
+          <button class="modal-close">&times;</button>
+        </div>
+        <form id="subject-form">
+          <div class="form-group">
+            <label for="subject-name" data-i18n="subjectName">Nom de la matière</label>
+            <input type="text" id="subject-name" required data-i18n-placeholder="subjectNamePlaceholder" placeholder="Ex: Mathématiques">
+          </div>
+          <button type="submit" class="btn btn-primary btn-full" data-i18n="save">Enregistrer</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Delete subject modal -->
+    <div id="delete-subject-modal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content modal-sm">
+        <div class="modal-header">
+          <h3 data-i18n="deleteSubjectTitle">Supprimer la matière</h3>
+          <button class="modal-close">&times;</button>
+        </div>
+        <p id="delete-subject-name" class="delete-warning"></p>
+        <div class="modal-actions">
+          <button id="confirm-delete-subject-btn" class="btn btn-danger" data-i18n="confirm">Confirmer</button>
           <button class="modal-close btn btn-ghost" data-i18n="cancel">Annuler</button>
         </div>
       </div>

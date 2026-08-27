@@ -155,7 +155,31 @@ export const SCHEMA_SQL = `
     FOREIGN KEY (user_id) REFERENCES users(id),
     FOREIGN KEY (class_id) REFERENCES classes(id)
   );
+
+  CREATE TABLE IF NOT EXISTS subjects (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT UNIQUE NOT NULL,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
 `;
+
+const DEFAULT_SUBJECTS = [
+  'Mathématiques',
+  'Arabe',
+  'Français',
+  'Anglais',
+  'Physique-Chimie',
+  'SVT',
+  'Histoire-Géographie',
+  'Éducation islamique',
+  'Informatique',
+  'EPS',
+  'Philosophie'
+];
+
+function isEconomie(name) {
+  return String(name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() === 'economie';
+}
 
 let schemaReady;
 
@@ -186,6 +210,36 @@ export async function ensureSchema() {
       `);
     } catch {
       // ignore if tables are empty or already assigned
+    }
+    try {
+      const existing = await all('SELECT name FROM subjects');
+      const known = new Set(existing.map((row) => String(row.name || '').trim().toLowerCase()));
+      const toInsert = [];
+      if (!existing.length) {
+        for (const name of DEFAULT_SUBJECTS) {
+          if (!known.has(name.toLowerCase())) toInsert.push(name);
+        }
+      }
+      const used = await all(`
+        SELECT DISTINCT subject AS name FROM users
+        WHERE role = 'teacher' AND subject IS NOT NULL AND TRIM(subject) != ''
+      `);
+      for (const row of used) {
+        const name = String(row.name || '').trim();
+        if (!name || isEconomie(name) || known.has(name.toLowerCase())) continue;
+        if (toInsert.some((item) => item.toLowerCase() === name.toLowerCase())) continue;
+        toInsert.push(name);
+      }
+      for (const name of toInsert) {
+        try {
+          await run('INSERT INTO subjects (name) VALUES (?)', [name]);
+          known.add(name.toLowerCase());
+        } catch {
+          // already exists
+        }
+      }
+    } catch {
+      // ignore if table is unavailable
     }
     try {
       await run('PRAGMA foreign_keys = ON');
